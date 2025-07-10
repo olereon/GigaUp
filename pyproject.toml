@@ -1,6 +1,63 @@
 [build-system]
-requires = ["setuptools>=42.0", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "gigapixel"
+version = "2.0.0"
+description = "Topaz Gigapixel AI automation tool with advanced GUI and CLI interfaces"
+readme = "README.md"
+license = {text = "Apache License, Version 2.0"}
+authors = [
+    {name = "TimNekk", email = "herew26@gmail.com"},
+]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: End Users/Desktop", 
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7", 
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "pywinauto",
+    "clipboard", 
+    "loguru",
+    "the-retry",
+]
+
+[project.optional-dependencies]
+dev = [
+    "flake8==4.0.1",
+    "mypy==0.961",
+]
+gui = [
+    "plyer>=2.0.0",
+]
+
+[project.scripts]
+gigapixel-cli = "gigapixel.cli:main"
+gigapixel-gui = "gigapixel.gui.main_window:main"
+gigapixel = "gigapixel.gui.main_window:main"
+
+[project.urls]
+Homepage = "https://github.com/TimNekk/Gigapixel"
+Repository = "https://github.com/TimNekk/Gigapixel"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["gigapixel*"]
 
 [tool.mypy]
 mypy_path = "src"

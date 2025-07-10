@@ -31,12 +31,24 @@ setup(
         'pywinauto',
         'clipboard',
         'loguru',
+        'the-retry',
     ],
     extras_require={
         'dev': [
             'flake8==4.0.1',
             'mypy==0.961'
+        ],
+        'gui': [
+            'plyer>=2.0.0',  # For cross-platform notifications
         ]
+    },
+    
+    entry_points={
+        'console_scripts': [
+            'gigapixel-cli=gigapixel.cli:main',
+            'gigapixel-gui=gigapixel.gui.main_window:main',
+            'gigapixel=gigapixel.gui.main_window:main',  # Default to GUI
+        ],
     },
 
     setuptools_git_versioning={
