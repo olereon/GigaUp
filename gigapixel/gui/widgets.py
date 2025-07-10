@@ -308,9 +308,21 @@ class ParameterWidget(ttk.Frame):
             # Validate and convert value
             try:
                 if self.param_def.param_type == "integer":
-                    return int(value)
+                    int_value = int(value)
+                    # Clamp to valid range
+                    if self.param_def.min_value is not None:
+                        int_value = max(int_value, int(self.param_def.min_value))
+                    if self.param_def.max_value is not None:
+                        int_value = min(int_value, int(self.param_def.max_value))
+                    return int_value
                 elif self.param_def.param_type == "decimal":
-                    return float(value)
+                    float_value = float(value)
+                    # Clamp to valid range
+                    if self.param_def.min_value is not None:
+                        float_value = max(float_value, self.param_def.min_value)
+                    if self.param_def.max_value is not None:
+                        float_value = min(float_value, self.param_def.max_value)
+                    return round(float_value, 3)  # Round to avoid precision issues
                 elif self.param_def.param_type == "boolean":
                     return bool(value)
                 else:
