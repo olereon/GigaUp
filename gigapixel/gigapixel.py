@@ -151,41 +151,76 @@ class Gigapixel:
             # Step 1: Focus the main window and wait for it to be ready
             logger.debug("Focusing main window and waiting for it to be ready")
             self._main_window.set_focus()
-            time.sleep(1.0)  # Give more time for window to be active
+            time.sleep(1.5)  # Give more time for window to be active
             
-            # Step 2: Open file dialog with Ctrl+O
-            logger.debug("Opening file dialog with Ctrl+O")
-            send_keys('^o')
-            time.sleep(2.0)  # Wait longer for dialog to open
-            
-            # Step 3: Verify the file dialog opened by looking for "Open" dialog
-            logger.debug("Checking if file dialog opened...")
+            # Step 2: Try to open file dialog - use Browse button as primary method
             dialog_opened = False
+            
+            # Method 1: Try clicking the "Browse" button in the center of the screen
+            logger.debug("Attempting to click Browse button in center of screen")
             try:
-                # Look for the Open dialog window
-                open_dialog = None
-                dialog_patterns = [
-                    ("Open dialog", lambda: self._main_window.child_window(title="Open")),
-                    ("Open button", lambda: self._main_window.child_window(title="Open", control_type="Button")),
-                    ("File dialog", lambda: self._main_window.child_window(control_type="Dialog")),
-                ]
-                
-                for pattern_name, dialog_func in dialog_patterns:
+                # Look for Browse button (not "Browse Images" which appears when no image is loaded)
+                browse_button = self._main_window.child_window(title="Browse", control_type="Button")
+                browse_button.click_input()
+                logger.debug("✓ Clicked Browse button successfully")
+                time.sleep(2.0)  # Wait for dialog to open
+                dialog_opened = True
+            except Exception as e:
+                logger.debug(f"Browse button click failed: {e}")
+            
+            # Method 2: Fallback to Ctrl+O if Browse button didn't work
+            if not dialog_opened:
+                logger.debug("Fallback: Opening file dialog with Ctrl+O")
+                send_keys('^o')
+                time.sleep(2.0)  # Wait for dialog to open
+            
+            # Step 3: Verify the file dialog actually opened with stricter detection
+            logger.debug("Verifying file dialog opened with strict detection...")
+            dialog_confirmed = False
+            
+            try:
+                # Look for actual file dialog window (separate from main window)
+                # The file dialog should be a separate dialog window, not a child of main window
+                app_dialogs = self.app.windows()
+                for window in app_dialogs:
                     try:
-                        open_dialog = dialog_func()
-                        logger.debug(f"Found file dialog using: {pattern_name}")
-                        dialog_opened = True
-                        break
+                        window_title = window.element_info.name.lower()
+                        if "open" in window_title or "browse" in window_title or "file" in window_title:
+                            logger.debug(f"✓ Found file dialog window: '{window.element_info.name}'")
+                            dialog_confirmed = True
+                            break
                     except:
                         continue
                 
-                if not dialog_opened:
-                    logger.warning("File dialog may not have opened, continuing anyway...")
-                else:
-                    logger.debug("File dialog confirmed open")
-                    
+                # Alternative: Look for file dialog specific elements
+                if not dialog_confirmed:
+                    try:
+                        # Look for file name input field or file list in main window
+                        file_input = self._main_window.child_window(control_type="Edit", title_re=".*[Ff]ile.*")
+                        logger.debug("✓ Found file input field in dialog")
+                        dialog_confirmed = True
+                    except:
+                        pass
+                
+                # Alternative: Look for common dialog buttons
+                if not dialog_confirmed:
+                    try:
+                        open_button = self._main_window.child_window(title="Open", control_type="Button")
+                        cancel_button = self._main_window.child_window(title="Cancel", control_type="Button")
+                        # Both buttons should exist in a real file dialog
+                        logger.debug("✓ Found Open and Cancel buttons - file dialog confirmed")
+                        dialog_confirmed = True
+                    except:
+                        pass
+                        
             except Exception as e:
-                logger.warning(f"Could not verify file dialog opened: {e}")
+                logger.debug(f"Dialog verification error: {e}")
+            
+            if not dialog_confirmed:
+                logger.error("✗ File dialog did not open properly! Cannot proceed with file selection.")
+                raise ElementNotFound("File dialog failed to open - cannot select file")
+            
+            logger.debug("✓ File dialog confirmed open, proceeding with file selection")
             
             # Step 4: Enter the file path
             logger.debug(f"Entering file path: {photo_path}")
@@ -193,26 +228,21 @@ class Gigapixel:
             send_keys('^v')
             time.sleep(1.0)  # Wait for path to be entered
             
-            # Step 5: Click the "Open" button (or press Enter as fallback)
-            if dialog_opened:
-                try:
-                    logger.debug("Looking for and clicking Open button")
-                    open_button = self._main_window.child_window(title="Open", control_type="Button")
-                    open_button.click_input()
-                    logger.debug("Clicked Open button")
-                except:
-                    logger.debug("Could not find Open button, using Enter key instead")
-                    send_keys('{ENTER}')
-            else:
-                logger.debug("Using Enter key to open file")
+            # Step 5: Click the "Open" button to confirm file selection
+            try:
+                logger.debug("Looking for and clicking Open button")
+                open_button = self._main_window.child_window(title="Open", control_type="Button")
+                open_button.click_input()
+                logger.debug("✓ Clicked Open button")
+            except:
+                logger.debug("Could not find Open button, using Enter key instead")
                 send_keys('{ENTER}')
             
-            # Step 6: Wait for file to load
-            logger.debug("Waiting for file to load...")
-            time.sleep(3.0)  # Give more time for file to load
+            # Step 6: Wait for file to load and dialog to close
+            logger.debug("Waiting for file to load and dialog to close...")
+            time.sleep(4.0)  # Give more time for file to load
             
-            # Step 7: Thoroughly verify that image loaded by checking for UI elements
-            # Based on screenshot: look for "Upscale" dropdown, scale buttons, or model selection panel
+            # Step 7: Verify that image loaded by checking for UI elements
             logger.debug("Verifying that image loaded successfully...")
             image_loaded = False
             max_retries = 3
@@ -256,20 +286,20 @@ class Gigapixel:
                 except:
                     pass
                 
-                # Method 5: Check if Browse Images button is gone
+                # Method 5: Check if Browse button is no longer the prominent center button
                 try:
-                    browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
-                    # If we can still see Browse Images, the image didn't load
-                    logger.debug("✗ Browse Images button still visible")
+                    browse_button = self._main_window.child_window(title="Browse", control_type="Button")
+                    # If we can still see the main Browse button, the image didn't load
+                    logger.debug("✗ Main Browse button still visible, image may not have loaded")
                 except:
-                    # Browse button is gone, which is good
-                    logger.debug("✓ Image loaded - Browse Images button gone")
+                    # Browse button is gone/changed, which suggests image loaded
+                    logger.debug("✓ Image loaded - main Browse button no longer prominent")
                     image_loaded = True
                     break
                 
                 if not image_loaded and retry < max_retries - 1:
                     logger.debug(f"Image not detected as loaded, waiting and retrying...")
-                    time.sleep(2.0)  # Wait before retrying
+                    time.sleep(3.0)  # Wait longer before retrying
             
             if image_loaded:
                 logger.info("✓ Image successfully loaded and verified")
