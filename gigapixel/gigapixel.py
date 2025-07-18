@@ -148,75 +148,134 @@ class Gigapixel:
         def open_photo(self, photo_path: Path) -> None:
             import time
             
-            # Focus the main window
+            # Step 1: Focus the main window and wait for it to be ready
+            logger.debug("Focusing main window and waiting for it to be ready")
             self._main_window.set_focus()
-            time.sleep(0.2)
+            time.sleep(1.0)  # Give more time for window to be active
             
-            # Open file dialog with Ctrl+O
-            logger.debug("Opening file dialog")
+            # Step 2: Open file dialog with Ctrl+O
+            logger.debug("Opening file dialog with Ctrl+O")
             send_keys('^o')
-            time.sleep(1.0)  # Wait for dialog to fully open
+            time.sleep(2.0)  # Wait longer for dialog to open
             
-            # Type the file path directly
-            logger.debug(f"Typing file path: {photo_path}")
+            # Step 3: Verify the file dialog opened by looking for "Open" dialog
+            logger.debug("Checking if file dialog opened...")
+            dialog_opened = False
+            try:
+                # Look for the Open dialog window
+                open_dialog = None
+                dialog_patterns = [
+                    ("Open dialog", lambda: self._main_window.child_window(title="Open")),
+                    ("Open button", lambda: self._main_window.child_window(title="Open", control_type="Button")),
+                    ("File dialog", lambda: self._main_window.child_window(control_type="Dialog")),
+                ]
+                
+                for pattern_name, dialog_func in dialog_patterns:
+                    try:
+                        open_dialog = dialog_func()
+                        logger.debug(f"Found file dialog using: {pattern_name}")
+                        dialog_opened = True
+                        break
+                    except:
+                        continue
+                
+                if not dialog_opened:
+                    logger.warning("File dialog may not have opened, continuing anyway...")
+                else:
+                    logger.debug("File dialog confirmed open")
+                    
+            except Exception as e:
+                logger.warning(f"Could not verify file dialog opened: {e}")
+            
+            # Step 4: Enter the file path
+            logger.debug(f"Entering file path: {photo_path}")
             clipboard.copy(str(photo_path))
             send_keys('^v')
-            time.sleep(0.5)  # Wait for path to be entered
+            time.sleep(1.0)  # Wait for path to be entered
             
-            # Press Enter to open the file
-            logger.debug("Pressing Enter to open file")
-            send_keys('{ENTER}')
-            time.sleep(2.0)  # Wait for file to load
-            
-            # Check if image loaded by looking for UI elements that appear when an image is loaded
-            # Based on screenshot: look for "Upscale" dropdown, "Export" button, or model selection panel
-            try:
-                logger.debug("Checking if image loaded...")
-                image_loaded = False
-                
-                # Method 1: Check for "Upscale" dropdown (visible when image is loaded)
+            # Step 5: Click the "Open" button (or press Enter as fallback)
+            if dialog_opened:
                 try:
-                    upscale_dropdown = self._main_window.child_window(title="Upscale")
-                    logger.debug("Image appears to be loaded (found Upscale dropdown)")
+                    logger.debug("Looking for and clicking Open button")
+                    open_button = self._main_window.child_window(title="Open", control_type="Button")
+                    open_button.click_input()
+                    logger.debug("Clicked Open button")
+                except:
+                    logger.debug("Could not find Open button, using Enter key instead")
+                    send_keys('{ENTER}')
+            else:
+                logger.debug("Using Enter key to open file")
+                send_keys('{ENTER}')
+            
+            # Step 6: Wait for file to load
+            logger.debug("Waiting for file to load...")
+            time.sleep(3.0)  # Give more time for file to load
+            
+            # Step 7: Thoroughly verify that image loaded by checking for UI elements
+            # Based on screenshot: look for "Upscale" dropdown, scale buttons, or model selection panel
+            logger.debug("Verifying that image loaded successfully...")
+            image_loaded = False
+            max_retries = 3
+            
+            for retry in range(max_retries):
+                logger.debug(f"Image loading verification attempt {retry + 1}/{max_retries}")
+                
+                # Method 1: Check for "Upscale" text/label (visible when image is loaded)
+                try:
+                    upscale_element = self._main_window.child_window(title="Upscale")
+                    logger.debug("✓ Image loaded - found Upscale element")
                     image_loaded = True
+                    break
                 except:
                     pass
                 
-                # Method 2: Check for "Export" button (appears when image is loaded)
-                if not image_loaded:
-                    try:
-                        export_button = self._main_window.child_window(title_re=".*Export.*")
-                        logger.debug("Image appears to be loaded (found Export button)")
-                        image_loaded = True
-                    except:
-                        pass
+                # Method 2: Check for scale buttons (1x, 2x, 4x, 6x)
+                try:
+                    scale_button = self._main_window.child_window(title="2x")
+                    logger.debug("✓ Image loaded - found scale button")
+                    image_loaded = True
+                    break
+                except:
+                    pass
                 
-                # Method 3: Check for model selection elements (High fidelity, Standard, etc.)
-                if not image_loaded:
-                    try:
-                        model_element = self._main_window.child_window(title="High fidelity")
-                        logger.debug("Image appears to be loaded (found model selection)")
-                        image_loaded = True
-                    except:
-                        pass
+                # Method 3: Check for "Export" button (appears when image is loaded)
+                try:
+                    export_button = self._main_window.child_window(title_re=".*Export.*")
+                    logger.debug("✓ Image loaded - found Export button")
+                    image_loaded = True
+                    break
+                except:
+                    pass
                 
-                # Method 4: Check if Browse Images button is gone
-                if not image_loaded:
-                    try:
-                        browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
-                        # If we can still see Browse Images, the image didn't load
-                        logger.warning("Browse Images button still visible, image may not have loaded")
-                        time.sleep(2.0)  # Give it more time
-                    except:
-                        # Browse button is gone, which is good
-                        logger.debug("Browse Images button gone, image likely loaded")
-                        image_loaded = True
+                # Method 4: Check for model selection elements (High fidelity, Standard, etc.)
+                try:
+                    model_element = self._main_window.child_window(title="High fidelity")
+                    logger.debug("✓ Image loaded - found model selection")
+                    image_loaded = True
+                    break
+                except:
+                    pass
                 
-                if not image_loaded:
-                    logger.warning("Could not verify that image loaded using any detection method")
+                # Method 5: Check if Browse Images button is gone
+                try:
+                    browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
+                    # If we can still see Browse Images, the image didn't load
+                    logger.debug("✗ Browse Images button still visible")
+                except:
+                    # Browse button is gone, which is good
+                    logger.debug("✓ Image loaded - Browse Images button gone")
+                    image_loaded = True
+                    break
                 
-            except Exception as e:
-                logger.warning(f"Could not verify image loaded: {e}")
+                if not image_loaded and retry < max_retries - 1:
+                    logger.debug(f"Image not detected as loaded, waiting and retrying...")
+                    time.sleep(2.0)  # Wait before retrying
+            
+            if image_loaded:
+                logger.info("✓ Image successfully loaded and verified")
+            else:
+                logger.error("✗ Could not verify that image loaded - this may cause subsequent operations to fail")
+                # Don't fail completely, but warn that operations might not work
             
             logger.info(f"File opening sequence completed for: {photo_path.name}")
                 
@@ -321,13 +380,35 @@ class Gigapixel:
                 if scale_button is None:
                     raise ElementNotFound(f"Scale button {scale.value} not found")
                 
-                # Click the scale button
-                scale_button.click_input()
-                self.scale = scale
-                logger.debug(f"Scale set to {scale.value}")
-                
-                # Cache the button for future use
-                self._scale_buttons[scale] = scale_button
+                # Click the scale button with verification
+                logger.debug(f"Attempting to click scale button: {scale.value}")
+                try:
+                    # Try different click methods
+                    try:
+                        scale_button.click_input()
+                        logger.debug(f"✓ Clicked scale button using click_input()")
+                    except:
+                        try:
+                            scale_button.click()
+                            logger.debug(f"✓ Clicked scale button using click()")
+                        except:
+                            # Fallback: try to set focus and use space/enter
+                            scale_button.set_focus()
+                            import time
+                            time.sleep(0.2)
+                            from pywinauto.keyboard import send_keys
+                            send_keys(' ')  # Space to activate button
+                            logger.debug(f"✓ Activated scale button using keyboard")
+                    
+                    self.scale = scale
+                    logger.debug(f"✓ Scale successfully set to {scale.value}")
+                    
+                    # Cache the button for future use
+                    self._scale_buttons[scale] = scale_button
+                    
+                except Exception as click_error:
+                    logger.error(f"Failed to click scale button {scale.value}: {click_error}")
+                    raise ElementNotFound(f"Scale button {scale.value} found but could not be clicked: {click_error}")
                 
             except ElementNotFoundError:
                 raise ElementNotFound(f"Scale button {scale.value} not found")
