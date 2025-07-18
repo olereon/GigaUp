@@ -303,6 +303,38 @@ class Gigapixel:
             
             if image_loaded:
                 logger.info("✓ Image successfully loaded and verified")
+                
+                # Update window reference since the title likely changed to include the filename
+                logger.debug("Updating window reference after image load...")
+                try:
+                    # Try to find the updated window with the new title
+                    updated_window = None
+                    window_patterns = [
+                        ("Image filename window", lambda: self.app.window(title_re=f".*{photo_path.stem}.*")),
+                        ("Any Gigapixel window", lambda: self.app.window(title_re=".*Gigapixel.*")),
+                        ("Current main window", lambda: self._main_window),  # Keep current if others fail
+                    ]
+                    
+                    for pattern_name, window_func in window_patterns:
+                        try:
+                            test_window = window_func()
+                            # Verify it's still the right window by checking for Upscale element
+                            test_window.child_window(title="Upscale")
+                            logger.debug(f"✓ Updated window reference using: {pattern_name}")
+                            updated_window = test_window
+                            break
+                        except:
+                            continue
+                    
+                    if updated_window and updated_window != self._main_window:
+                        self._main_window = updated_window
+                        logger.debug(f"✓ Window reference updated to: '{self._main_window.element_info.name}'")
+                    else:
+                        logger.debug("Window reference unchanged - keeping current window")
+                        
+                except Exception as e:
+                    logger.debug(f"Could not update window reference: {e}, keeping current window")
+                
             else:
                 logger.error("✗ Could not verify that image loaded - this may cause subsequent operations to fail")
                 # Don't fail completely, but warn that operations might not work
