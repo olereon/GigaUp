@@ -121,12 +121,22 @@ class Gigapixel:
         )
         @log("Opening photo: {}", "Photo opened", format=(1,), level=Level.DEBUG)
         def open_photo(self, photo_path: Path) -> None:
-            while photo_path.name not in self._main_window.element_info.name:
-                logger.debug("Trying to open photo")
+            import time
+            max_attempts = 10
+            attempt = 0
+            
+            while photo_path.name not in self._main_window.element_info.name and attempt < max_attempts:
+                logger.debug(f"Trying to open photo (attempt {attempt + 1}/{max_attempts})")
                 self._main_window.set_focus()
                 send_keys('{ESC}^o')
+                time.sleep(0.5)  # Wait for dialog
                 clipboard.copy(str(photo_path))
-                send_keys('^v {ENTER}{ESC}')
+                send_keys('^v {ENTER}')
+                time.sleep(1.0)  # Wait for file to load
+                attempt += 1
+            
+            if attempt >= max_attempts:
+                logger.warning(f"Photo may not have opened after {max_attempts} attempts, continuing anyway")
                 
 
         @log("Saving photo", "Photo saved", level=Level.DEBUG)
@@ -192,33 +202,58 @@ class Gigapixel:
 
             try:
                 if mode not in self._mode_buttons:
-                    self._mode_buttons[mode] = self._main_window.child_window(title=mode.value)
+                    # Try multiple control types
+                    for control_type in ["Button", "RadioButton", None]:
+                        try:
+                            if control_type:
+                                self._mode_buttons[mode] = self._main_window.child_window(
+                                    title=mode.value, 
+                                    control_type=control_type
+                                )
+                            else:
+                                self._mode_buttons[mode] = self._main_window.child_window(title=mode.value)
+                            break
+                        except ElementNotFoundError:
+                            continue
+                    
+                    if mode not in self._mode_buttons:
+                        raise ElementNotFoundError
+                        
                 self._mode_buttons[mode].click_input()
                 self.mode = mode
                 logger.debug(f"Mode set to {mode.value}")
             except ElementNotFoundError:
                 # Try alternative UI element names
                 alternative_names = {
-                    Mode.STANDARD: ["Standard", "standard"],
-                    Mode.HIGH_FIDELITY: ["High fidelity", "High Fidelity", "high fidelity"],
-                    Mode.LOW_RESOLUTION: ["Low res", "Low resolution", "low res"],
-                    Mode.TEXT_AND_SHAPES: ["Text & shapes", "Text and shapes", "text & shapes"],
-                    Mode.ART_AND_CG: ["Art & CG", "Art and CG", "art & cg"],
-                    Mode.RECOVERY: ["Recovery", "recovery"]
+                    Mode.STANDARD: ["Standard", "standard", "Standard v2"],
+                    Mode.HIGH_FIDELITY: ["High fidelity", "High Fidelity", "high fidelity", "HiFi"],
+                    Mode.LOW_RESOLUTION: ["Low res", "Low resolution", "low res", "Low Res"],
+                    Mode.TEXT_AND_SHAPES: ["Text & shapes", "Text and shapes", "text & shapes", "Text"],
+                    Mode.ART_AND_CG: ["Art & CG", "Art and CG", "art & cg", "CGI"],
+                    Mode.RECOVERY: ["Recovery", "recovery", "Face Recovery"]
                 }
                 
                 found = False
                 for alt_name in alternative_names.get(mode, []):
-                    try:
-                        alt_button = self._main_window.child_window(title=alt_name)
-                        alt_button.click_input()
-                        self._mode_buttons[mode] = alt_button
-                        self.mode = mode
-                        logger.debug(f"Mode set to {mode.value} using alternative name: {alt_name}")
-                        found = True
+                    for control_type in ["Button", "RadioButton", None]:
+                        try:
+                            if control_type:
+                                alt_button = self._main_window.child_window(
+                                    title=alt_name,
+                                    control_type=control_type
+                                )
+                            else:
+                                alt_button = self._main_window.child_window(title=alt_name)
+                            alt_button.click_input()
+                            self._mode_buttons[mode] = alt_button
+                            self.mode = mode
+                            logger.debug(f"Mode set to {mode.value} using alternative: {alt_name}, type: {control_type}")
+                            found = True
+                            break
+                        except ElementNotFoundError:
+                            continue
+                    if found:
                         break
-                    except ElementNotFoundError:
-                        continue
                 
                 if not found:
                     logger.error(f"Could not find mode button for {mode.value} - trying to continue anyway")
@@ -271,7 +306,11 @@ class Gigapixel:
             
             # Set individual parameters if the legacy UI supports them
             # Note: Most parameters will be ignored by legacy modes, but we log them
+            # Skip parameters with default values (0.0) to avoid unnecessary warnings
             for param_name, param_value in parameters.parameters.items():
+                # Skip default/zero values
+                if isinstance(param_value, (int, float)) and param_value == 0.0:
+                    continue
                 logger.debug(f"Parameter {param_name} = {param_value} (may not be applied in legacy mode)")
                 self._set_parameter_value(param_name, param_value)
         
