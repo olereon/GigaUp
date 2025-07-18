@@ -104,19 +104,30 @@ class Gigapixel:
             self.app = app
             self._processing_timeout = processing_timeout
             
-            # Find the main window - try different patterns
-            try:
-                # Try "Gigapixel 8" pattern first (newer versions)
-                self._main_window = self.app.window(title_re=".*Gigapixel [0-9]+.*")
-            except:
-                try:
-                    # Try generic Gigapixel pattern
-                    self._main_window = self.app.window(title_re=".*Gigapixel.*")
-                except:
-                    # Fallback to any window
-                    self._main_window = self.app.window()
+            # Find the main window - try different patterns with better error handling
+            main_window = None
+            window_patterns = [
+                ("Gigapixel 8", lambda: self.app.window(title="Gigapixel 8")),
+                ("Gigapixel with number", lambda: self.app.window(title_re="Gigapixel [0-9]+")),
+                ("Any Gigapixel", lambda: self.app.window(title_re=".*Gigapixel.*")),
+                ("Top level window", lambda: self.app.top_window()),
+                ("Any window", lambda: self.app.window())
+            ]
             
-            logger.debug(f"Found main window: {self._main_window.element_info.name}")
+            for pattern_name, window_func in window_patterns:
+                try:
+                    logger.debug(f"Trying to find window with pattern: {pattern_name}")
+                    main_window = window_func()
+                    logger.debug(f"Found main window with '{pattern_name}': {main_window.element_info.name}")
+                    break
+                except Exception as e:
+                    logger.debug(f"Pattern '{pattern_name}' failed: {e}")
+                    continue
+            
+            if main_window is None:
+                raise Exception("Could not find Gigapixel main window with any pattern")
+            
+            self._main_window = main_window
 
             self.scale: Optional[Scale] = None
             self.mode: Optional[Mode] = None

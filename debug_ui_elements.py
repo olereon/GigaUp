@@ -26,6 +26,24 @@ def find_gigapixel_window(exe_path: str):
         return app
 
 
+def list_all_windows(app):
+    """List all available windows"""
+    print("\n" + "="*60)
+    print("ALL AVAILABLE WINDOWS")
+    print("="*60)
+    
+    try:
+        windows = app.windows()
+        for i, window in enumerate(windows):
+            try:
+                info = window.element_info
+                print(f"Window {i+1}: '{info.name}' | Type: {info.control_type} | Visible: {info.visible}")
+            except Exception as e:
+                print(f"Window {i+1}: Error reading window info: {e}")
+    except Exception as e:
+        print(f"Error listing windows: {e}")
+
+
 def print_all_elements(window, indent=0):
     """Recursively print all UI elements"""
     prefix = "  " * indent
@@ -42,7 +60,35 @@ def print_all_elements(window, indent=0):
 
 def analyze_ui_state(app):
     """Analyze current UI state"""
-    main_window = app.window(title_re=".*Gigapixel.*")
+    # List all windows first
+    list_all_windows(app)
+    
+    # Try to find main window with multiple patterns
+    main_window = None
+    window_patterns = [
+        ("Gigapixel 8", lambda: app.window(title="Gigapixel 8")),
+        ("Gigapixel with number", lambda: app.window(title_re="Gigapixel [0-9]+")),
+        ("Any Gigapixel", lambda: app.window(title_re=".*Gigapixel.*")),
+        ("Top level window", lambda: app.top_window()),
+    ]
+    
+    print("\n" + "="*60)
+    print("WINDOW PATTERN TESTING")
+    print("="*60)
+    
+    for pattern_name, window_func in window_patterns:
+        try:
+            print(f"Testing pattern: {pattern_name}")
+            test_window = window_func()
+            print(f"✓ SUCCESS: Found window '{test_window.element_info.name}' with pattern '{pattern_name}'")
+            if main_window is None:
+                main_window = test_window
+        except Exception as e:
+            print(f"✗ FAILED: Pattern '{pattern_name}' failed: {e}")
+    
+    if main_window is None:
+        print("ERROR: Could not find main window with any pattern!")
+        return
     
     print("\n" + "="*80)
     print("MAIN WINDOW ANALYSIS")
