@@ -156,11 +156,11 @@ class Gigapixel:
             # Step 2: Try to open file dialog - use Browse button as primary method
             dialog_opened = False
             
-            # Method 1: Try clicking the "Browse" button in the center of the screen
-            logger.debug("Attempting to click Browse button in center of screen")
+            # Method 1: Try clicking the "Browse images" button in the center of the screen
+            logger.debug("Attempting to click Browse images button in center of screen")
             try:
-                # Look for Browse button (not "Browse Images" which appears when no image is loaded)
-                browse_button = self._main_window.child_window(title="Browse", control_type="Button")
+                # Look for "Browse images" button which appears when no image is loaded
+                browse_button = self._main_window.child_window(title="Browse images", control_type="Button")
                 browse_button.click_input()
                 logger.debug("✓ Clicked Browse button successfully")
                 time.sleep(2.0)  # Wait for dialog to open
@@ -286,14 +286,14 @@ class Gigapixel:
                 except:
                     pass
                 
-                # Method 5: Check if Browse button is no longer the prominent center button
+                # Method 5: Check if Browse images button is no longer the prominent center button
                 try:
-                    browse_button = self._main_window.child_window(title="Browse", control_type="Button")
-                    # If we can still see the main Browse button, the image didn't load
-                    logger.debug("✗ Main Browse button still visible, image may not have loaded")
+                    browse_button = self._main_window.child_window(title="Browse images", control_type="Button")
+                    # If we can still see the main Browse images button, the image didn't load
+                    logger.debug("✗ Browse images button still visible, image may not have loaded")
                 except:
-                    # Browse button is gone/changed, which suggests image loaded
-                    logger.debug("✓ Image loaded - main Browse button no longer prominent")
+                    # Browse images button is gone/changed, which suggests image loaded
+                    logger.debug("✓ Image loaded - Browse images button no longer prominent")
                     image_loaded = True
                     break
                 
