@@ -103,7 +103,20 @@ class Gigapixel:
 
             self.app = app
             self._processing_timeout = processing_timeout
-            self._main_window = self.app.window()
+            
+            # Find the main window - try different patterns
+            try:
+                # Try "Gigapixel 8" pattern first (newer versions)
+                self._main_window = self.app.window(title_re=".*Gigapixel [0-9]+.*")
+            except:
+                try:
+                    # Try generic Gigapixel pattern
+                    self._main_window = self.app.window(title_re=".*Gigapixel.*")
+                except:
+                    # Fallback to any window
+                    self._main_window = self.app.window()
+            
+            logger.debug(f"Found main window: {self._main_window.element_info.name}")
 
             self.scale: Optional[Scale] = None
             self.mode: Optional[Mode] = None
@@ -122,21 +135,58 @@ class Gigapixel:
         @log("Opening photo: {}", "Photo opened", format=(1,), level=Level.DEBUG)
         def open_photo(self, photo_path: Path) -> None:
             import time
-            max_attempts = 10
-            attempt = 0
             
-            while photo_path.name not in self._main_window.element_info.name and attempt < max_attempts:
-                logger.debug(f"Trying to open photo (attempt {attempt + 1}/{max_attempts})")
-                self._main_window.set_focus()
-                send_keys('{ESC}^o')
-                time.sleep(0.5)  # Wait for dialog
-                clipboard.copy(str(photo_path))
-                send_keys('^v {ENTER}')
-                time.sleep(1.0)  # Wait for file to load
-                attempt += 1
+            # Focus the main window
+            self._main_window.set_focus()
+            time.sleep(0.2)
             
-            if attempt >= max_attempts:
-                logger.warning(f"Photo may not have opened after {max_attempts} attempts, continuing anyway")
+            # Open file dialog with Ctrl+O
+            logger.debug("Opening file dialog")
+            send_keys('^o')
+            time.sleep(1.0)  # Wait for dialog to fully open
+            
+            # Type the file path directly
+            logger.debug(f"Typing file path: {photo_path}")
+            clipboard.copy(str(photo_path))
+            send_keys('^v')
+            time.sleep(0.5)  # Wait for path to be entered
+            
+            # Press Enter to open the file
+            logger.debug("Pressing Enter to open file")
+            send_keys('{ENTER}')
+            time.sleep(2.0)  # Wait for file to load
+            
+            # Check if image loaded by looking for UI elements that appear when an image is loaded
+            # We'll check for the scale buttons or export button which only appear with an image
+            try:
+                # Try to find any element that indicates an image is loaded
+                # For example, the Save button or scale controls
+                logger.debug("Checking if image loaded...")
+                
+                # Method 1: Check for Save button (Ctrl+S should be available)
+                try:
+                    save_test = self._main_window.child_window(title="Save", control_type="Button", found_index=0)
+                    logger.debug("Image appears to be loaded (found Save button)")
+                except:
+                    # Method 2: Try to find scale controls
+                    try:
+                        scale_control = self._main_window.child_window(title_re=".*[124]x.*", control_type="Button", found_index=0)
+                        logger.debug("Image appears to be loaded (found scale controls)")
+                    except:
+                        # Method 3: Check if Browse Images button is gone
+                        try:
+                            browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
+                            # If we can still see Browse Images, the image didn't load
+                            logger.warning("Browse Images button still visible, image may not have loaded")
+                            time.sleep(2.0)  # Give it more time
+                        except:
+                            # Browse button is gone, which is good
+                            logger.debug("Browse Images button gone, image likely loaded")
+                
+            except Exception as e:
+                logger.warning(f"Could not verify image loaded: {e}")
+            
+            logger.info(f"File opening sequence completed for: {photo_path.name}")
                 
 
         @log("Saving photo", "Photo saved", level=Level.DEBUG)
