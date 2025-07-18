@@ -111,18 +111,41 @@ def analyze_ui_state(app):
     except:
         print("✗ 'Browse Images' button not found - Image may be loaded")
     
-    # Check for scale buttons
+    # Check for scale buttons (should be under Upscale panel)
+    print("\n" + "-"*40)
+    print("SCALE BUTTONS (1x, 2x, 4x, 6x, Custom)")
+    print("-"*40)
+    
     scale_found = False
-    for scale in ["1x", "2x", "4x", "6x"]:
-        try:
-            scale_btn = main_window.child_window(title=scale)
-            print(f"✓ Found '{scale}' button")
-            scale_found = True
-        except:
-            pass
+    for scale in ["1x", "2x", "4x", "6x", "Custom"]:
+        for control_type in ["Button", "RadioButton", None]:
+            try:
+                if control_type:
+                    scale_btn = main_window.child_window(title=scale, control_type=control_type)
+                else:
+                    scale_btn = main_window.child_window(title=scale)
+                print(f"✓ Found '{scale}' as {control_type or 'Any'}")
+                scale_found = True
+                break
+            except:
+                pass
+    
+    # Try to find Upscale section and search within it
+    try:
+        upscale_section = main_window.child_window(title="Upscale")
+        print("✓ Found 'Upscale' section")
+        for scale in ["1x", "2x", "4x", "6x", "Custom"]:
+            try:
+                scale_btn = upscale_section.child_window(title=scale)
+                print(f"✓ Found '{scale}' in Upscale section")
+                scale_found = True
+            except:
+                pass
+    except:
+        print("✗ Could not find 'Upscale' section")
     
     if not scale_found:
-        print("✗ No scale buttons found")
+        print("✗ No scale buttons found with any method")
     
     # Check for mode buttons
     print("\n" + "-"*40)

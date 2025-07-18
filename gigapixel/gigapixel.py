@@ -107,6 +107,7 @@ class Gigapixel:
             # Find the main window - try different patterns with better error handling
             main_window = None
             window_patterns = [
+                ("Topaz Gigapixel AI", lambda: self.app.window(title="Topaz Gigapixel AI")),
                 ("Gigapixel 8", lambda: self.app.window(title="Gigapixel 8")),
                 ("Gigapixel with number", lambda: self.app.window(title_re="Gigapixel [0-9]+")),
                 ("Any Gigapixel", lambda: self.app.window(title_re=".*Gigapixel.*")),
@@ -168,31 +169,51 @@ class Gigapixel:
             time.sleep(2.0)  # Wait for file to load
             
             # Check if image loaded by looking for UI elements that appear when an image is loaded
-            # We'll check for the scale buttons or export button which only appear with an image
+            # Based on screenshot: look for "Upscale" dropdown, "Export" button, or model selection panel
             try:
-                # Try to find any element that indicates an image is loaded
-                # For example, the Save button or scale controls
                 logger.debug("Checking if image loaded...")
+                image_loaded = False
                 
-                # Method 1: Check for Save button (Ctrl+S should be available)
+                # Method 1: Check for "Upscale" dropdown (visible when image is loaded)
                 try:
-                    save_test = self._main_window.child_window(title="Save", control_type="Button", found_index=0)
-                    logger.debug("Image appears to be loaded (found Save button)")
+                    upscale_dropdown = self._main_window.child_window(title="Upscale")
+                    logger.debug("Image appears to be loaded (found Upscale dropdown)")
+                    image_loaded = True
                 except:
-                    # Method 2: Try to find scale controls
+                    pass
+                
+                # Method 2: Check for "Export" button (appears when image is loaded)
+                if not image_loaded:
                     try:
-                        scale_control = self._main_window.child_window(title_re=".*[124]x.*", control_type="Button", found_index=0)
-                        logger.debug("Image appears to be loaded (found scale controls)")
+                        export_button = self._main_window.child_window(title_re=".*Export.*")
+                        logger.debug("Image appears to be loaded (found Export button)")
+                        image_loaded = True
                     except:
-                        # Method 3: Check if Browse Images button is gone
-                        try:
-                            browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
-                            # If we can still see Browse Images, the image didn't load
-                            logger.warning("Browse Images button still visible, image may not have loaded")
-                            time.sleep(2.0)  # Give it more time
-                        except:
-                            # Browse button is gone, which is good
-                            logger.debug("Browse Images button gone, image likely loaded")
+                        pass
+                
+                # Method 3: Check for model selection elements (High fidelity, Standard, etc.)
+                if not image_loaded:
+                    try:
+                        model_element = self._main_window.child_window(title="High fidelity")
+                        logger.debug("Image appears to be loaded (found model selection)")
+                        image_loaded = True
+                    except:
+                        pass
+                
+                # Method 4: Check if Browse Images button is gone
+                if not image_loaded:
+                    try:
+                        browse_button = self._main_window.child_window(title="Browse Images", control_type="Button")
+                        # If we can still see Browse Images, the image didn't load
+                        logger.warning("Browse Images button still visible, image may not have loaded")
+                        time.sleep(2.0)  # Give it more time
+                    except:
+                        # Browse button is gone, which is good
+                        logger.debug("Browse Images button gone, image likely loaded")
+                        image_loaded = True
+                
+                if not image_loaded:
+                    logger.warning("Could not verify that image loaded using any detection method")
                 
             except Exception as e:
                 logger.warning(f"Could not verify image loaded: {e}")
@@ -249,13 +270,67 @@ class Gigapixel:
                 return
 
             try:
-                if scale not in self._scale_buttons:
-                    self._scale_buttons[scale] = self._main_window.child_window(title=scale.value)
-                self._scale_buttons[scale].click_input()
+                logger.debug(f"Setting scale to {scale.value}")
+                
+                # The scale buttons (1x, 2x, 4x, 6x, Custom) are in a horizontal panel under "Upscale"
+                # Try multiple approaches to find the scale button
+                
+                scale_button = None
+                
+                # Method 1: Try direct title match
+                try:
+                    scale_button = self._main_window.child_window(title=scale.value)
+                    logger.debug(f"Found scale button with direct title: {scale.value}")
+                except ElementNotFoundError:
+                    pass
+                
+                # Method 2: Try with different control types
+                if scale_button is None:
+                    for control_type in ["Button", "RadioButton", None]:
+                        try:
+                            if control_type:
+                                scale_button = self._main_window.child_window(
+                                    title=scale.value, 
+                                    control_type=control_type
+                                )
+                            else:
+                                scale_button = self._main_window.child_window(title=scale.value)
+                            logger.debug(f"Found scale button with control type {control_type}: {scale.value}")
+                            break
+                        except ElementNotFoundError:
+                            continue
+                
+                # Method 3: Search more deeply in the UI hierarchy
+                if scale_button is None:
+                    try:
+                        # Try to find the Upscale section first, then look for the button within it
+                        upscale_section = self._main_window.child_window(title="Upscale")
+                        scale_button = upscale_section.child_window(title=scale.value)
+                        logger.debug(f"Found scale button in Upscale section: {scale.value}")
+                    except ElementNotFoundError:
+                        pass
+                
+                # Method 4: Try finding any button that contains the scale value
+                if scale_button is None:
+                    try:
+                        scale_button = self._main_window.child_window(title_re=f".*{scale.value}.*", control_type="Button")
+                        logger.debug(f"Found scale button with regex: .*{scale.value}.*")
+                    except ElementNotFoundError:
+                        pass
+                
+                if scale_button is None:
+                    raise ElementNotFound(f"Scale button {scale.value} not found")
+                
+                # Click the scale button
+                scale_button.click_input()
+                self.scale = scale
+                logger.debug(f"Scale set to {scale.value}")
+                
+                # Cache the button for future use
+                self._scale_buttons[scale] = scale_button
+                
             except ElementNotFoundError:
                 raise ElementNotFound(f"Scale button {scale.value} not found")
-            self.scale = scale
-            logger.debug(f"Scale set to {scale.value}")
 
         def _set_mode(self, mode: Mode) -> None:
             if self.mode == mode:
