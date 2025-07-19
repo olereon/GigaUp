@@ -325,8 +325,34 @@ def parse_parameters(param_string: str) -> Dict[str, Any]:
         try:
             return json.loads(param_string)
         except json.JSONDecodeError as e:
-            print(f"Error parsing parameters JSON: {e}")
-            sys.exit(1)
+            # Try to fix common JSON issues like single quotes
+            try:
+                import re
+                # Handle common cases where users use single quotes
+                # Replace single quotes with double quotes for simple key-value pairs
+                fixed_string = param_string
+                # Replace single quotes around keys and string values
+                fixed_string = re.sub(r"'([^']+)':", r'"\1":', fixed_string)
+                fixed_string = re.sub(r":\s*'([^']*)'", r': "\1"', fixed_string) 
+                # Handle numeric values (no quotes needed)
+                return json.loads(fixed_string)
+            except json.JSONDecodeError:
+                # Try alternative parsing using eval (safer with ast.literal_eval)
+                try:
+                    import ast
+                    # This handles Python dict syntax which is more forgiving
+                    result = ast.literal_eval(param_string)
+                    if isinstance(result, dict):
+                        return result
+                    else:
+                        raise ValueError("Not a dictionary")
+                except (ValueError, SyntaxError):
+                    print(f"Error parsing parameters: {e}")
+                    print(f"Input received: {repr(param_string)}")
+                    print(f"Examples of valid formats:")
+                    print(f'  JSON: \'{{"sharpen": 66, "denoise": 55}}\'')
+                    print(f"  Python: '{{\"sharpen\": 66, \"denoise\": 55}}'")
+                    sys.exit(1)
 
 
 def get_input_files(input_paths: List[str]) -> List[Path]:
