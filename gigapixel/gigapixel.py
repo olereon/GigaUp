@@ -775,6 +775,8 @@ class Gigapixel:
                                 break
                             except:
                                 continue
+                    except:
+                        pass
                 
                 # Method 3: Try to find any clickable element that might open the dropdown
                 if not dropdown_opened:
