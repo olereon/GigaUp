@@ -344,16 +344,65 @@ class Gigapixel:
 
         @log("Saving photo", "Photo saved", level=Level.DEBUG)
         def save_photo(self) -> None:
-            self._open_export_dialog()
+            """Save photo using the Export button"""
+            import time
+            
+            logger.debug("Looking for Export button to save image...")
+            
+            try:
+                # Look for the Export button with various patterns
+                export_patterns = [
+                    ("Export button", lambda: self._main_window.child_window(title_re=".*Export.*", control_type="Button")),
+                    ("Export 1 image", lambda: self._main_window.child_window(title="Export 1 image", control_type="Button")),
+                    ("Export images", lambda: self._main_window.child_window(title_re=".*Export.*image.*", control_type="Button")),
+                    ("Any Export", lambda: self._main_window.child_window(title_re=".*Export.*")),
+                ]
+                
+                export_clicked = False
+                for pattern_name, export_func in export_patterns:
+                    try:
+                        export_button = export_func()
+                        export_button.click_input()
+                        logger.debug(f"✓ Clicked Export button using: {pattern_name}")
+                        export_clicked = True
+                        break
+                    except:
+                        continue
+                
+                if not export_clicked:
+                    logger.error("Could not find Export button")
+                    # Fallback to old method
+                    self._open_export_dialog()
+                    send_keys('{ENTER}')
+                else:
+                    # Wait for export process to start
+                    time.sleep(2.0)
+                
+                # Wait for processing to complete
+                if self._cancel_processing_button is None:
+                    self._cancel_processing_button = self._main_window.child_window(title="Close window",
+                                                                                    control_type="Button",
+                                                                                    depth=1)
+                self._cancel_processing_button.wait('visible', timeout=self._processing_timeout)
 
-            send_keys('{ENTER}')
-            if self._cancel_processing_button is None:
-                self._cancel_processing_button = self._main_window.child_window(title="Close window",
-                                                                                control_type="Button",
-                                                                                depth=1)
-            self._cancel_processing_button.wait('visible', timeout=self._processing_timeout)
-
-            self._close_export_dialog()
+                # Close any remaining dialogs
+                self._close_export_dialog()
+                
+            except Exception as e:
+                logger.error(f"Error during export: {e}")
+                # Fallback to old export method
+                try:
+                    self._open_export_dialog()
+                    send_keys('{ENTER}')
+                    if self._cancel_processing_button is None:
+                        self._cancel_processing_button = self._main_window.child_window(title="Close window",
+                                                                                        control_type="Button",
+                                                                                        depth=1)
+                    self._cancel_processing_button.wait('visible', timeout=self._processing_timeout)
+                    self._close_export_dialog()
+                except Exception as fallback_error:
+                    logger.error(f"Fallback export also failed: {fallback_error}")
+                    raise
 
         @retry(
             expected_exception=(TimeoutError,),
@@ -623,52 +672,188 @@ class Gigapixel:
                 logger.warning(f"Could not set parameter {param_name}: {e}")
         
         def _set_model_via_legacy_mapping(self, model: AIModel):
-            """Fallback to legacy mode mapping for compatibility"""
-            # Map new models to legacy modes for UI automation
-            # This ensures all new models work with the existing Gigapixel AI interface
-            legacy_mapping = {
+            """Set model using the new dropdown-based model selection"""
+            logger.debug(f"Setting model: {model.display_name}")
+            
+            # First, we need to open the model selection dropdown
+            self._open_model_selection_dropdown()
+            
+            # Map new models to their display names in the UI
+            model_display_mapping = {
                 # Enhance models
+                "standard_v2": "Standard",
+                "high_fidelity_v2": "High fidelity", 
+                "low_resolution_v2": "Low res",
+                "text_refine": "Text & shapes",
+                "cgi": "Art & CG",
+                "redefine": "Redefine",  # Generative model
+                "recovery": "Recovery",
+                "recovery_v2": "Recovery",
+                
+                # Sharpen models
+                "sharpen_standard": "Standard",
+                "sharpen_strong": "Standard", 
+                "lens_blur": "Standard",
+                "lens_blur_v2": "Standard",
+                "motion_blur": "Standard",
+                "natural": "Standard",
+                "refocus": "Standard",
+                "super_focus": "Standard",
+                "super_focus_v2": "Standard",
+                
+                # Denoise models
+                "denoise_normal": "Standard",
+                "denoise_strong": "Standard", 
+                "denoise_extreme": "Standard",
+                
+                # Restore models
+                "dust_scratch": "Recovery",
+                
+                # Lighting models
+                "lighting_adjust": "Standard",
+                "white_balance": "Standard",
+            }
+            
+            target_model_name = model_display_mapping.get(model.name, "Standard")
+            logger.debug(f"Looking for model: {target_model_name}")
+            
+            # Try to click the model in the dropdown
+            model_selected = self._click_model_in_dropdown(target_model_name)
+            
+            if not model_selected:
+                # Fallback to legacy mode selection if dropdown method fails
+                logger.warning(f"Could not select {target_model_name} from dropdown, trying legacy mode selection")
+                legacy_mode = self._get_legacy_mode_for_model(model.name)
+                if legacy_mode:
+                    self._set_mode(legacy_mode)
+        
+        def _open_model_selection_dropdown(self):
+            """Open the model selection dropdown by clicking the left arrow button"""
+            import time
+            
+            logger.debug("Opening model selection dropdown...")
+            
+            try:
+                # Look for the left arrow button near the model selection area
+                # Try multiple approaches to find the dropdown trigger
+                
+                # Method 1: Look for left arrow or expand button
+                dropdown_opened = False
+                arrow_patterns = [
+                    ("Left arrow", lambda: self._main_window.child_window(title="<", control_type="Button")),
+                    ("Arrow button", lambda: self._main_window.child_window(title="◀", control_type="Button")),
+                    ("Expand arrow", lambda: self._main_window.child_window(control_type="Button", title_re=".*arrow.*")),
+                    ("Model dropdown", lambda: self._main_window.child_window(title_re=".*model.*", control_type="Button")),
+                ]
+                
+                for pattern_name, button_func in arrow_patterns:
+                    try:
+                        arrow_button = button_func()
+                        arrow_button.click_input()
+                        logger.debug(f"✓ Clicked dropdown arrow using: {pattern_name}")
+                        dropdown_opened = True
+                        break
+                    except:
+                        continue
+                
+                # Method 2: Look for the model selection area and click on it
+                if not dropdown_opened:
+                    try:
+                        # The model selection area might be a clickable region
+                        model_area_patterns = [
+                            ("Model selection area", lambda: self._main_window.child_window(title_re=".*High fidelity.*")),
+                            ("Current model", lambda: self._main_window.child_window(title_re=".*Standard.*")),
+                            ("Model panel", lambda: self._main_window.child_window(control_type="Group", title_re=".*model.*")),
+                        ]
+                        
+                        for pattern_name, area_func in model_area_patterns:
+                            try:
+                                model_area = area_func()
+                                model_area.click_input()
+                                logger.debug(f"✓ Clicked model area using: {pattern_name}")
+                                dropdown_opened = True
+                                break
+                            except:
+                                continue
+                
+                # Method 3: Try to find any clickable element that might open the dropdown
+                if not dropdown_opened:
+                    try:
+                        # Look for elements near Dimensions/Pixel density as mentioned
+                        dimensions_area = self._main_window.child_window(title="Dimensions")
+                        # Look for clickable elements near it
+                        nearby_buttons = self._main_window.children(control_type="Button")
+                        for button in nearby_buttons:
+                            try:
+                                # Try clicking buttons near the dimensions area
+                                button.click_input()
+                                logger.debug("✓ Clicked potential dropdown button near Dimensions")
+                                dropdown_opened = True
+                                break
+                            except:
+                                continue
+                    except:
+                        pass
+                
+                if dropdown_opened:
+                    time.sleep(1.0)  # Wait for dropdown to open
+                    logger.debug("✓ Model selection dropdown opened")
+                else:
+                    logger.warning("Could not open model selection dropdown")
+                    
+            except Exception as e:
+                logger.error(f"Error opening model selection dropdown: {e}")
+        
+        def _click_model_in_dropdown(self, model_name: str) -> bool:
+            """Click on a specific model in the opened dropdown"""
+            import time
+            
+            logger.debug(f"Looking for model '{model_name}' in dropdown...")
+            
+            try:
+                # Wait a moment for dropdown to be fully loaded
+                time.sleep(0.5)
+                
+                # Try multiple approaches to find the model
+                model_patterns = [
+                    ("Direct title", lambda: self._main_window.child_window(title=model_name)),
+                    ("Button type", lambda: self._main_window.child_window(title=model_name, control_type="Button")),
+                    ("List item", lambda: self._main_window.child_window(title=model_name, control_type="ListItem")),
+                    ("Text element", lambda: self._main_window.child_window(title=model_name, control_type="Text")),
+                    ("Any element", lambda: self._main_window.child_window(title_re=f".*{model_name}.*")),
+                ]
+                
+                for pattern_name, model_func in model_patterns:
+                    try:
+                        model_element = model_func()
+                        model_element.click_input()
+                        logger.debug(f"✓ Selected model '{model_name}' using: {pattern_name}")
+                        
+                        # Wait for selection to take effect
+                        time.sleep(1.0)
+                        return True
+                    except:
+                        continue
+                
+                logger.warning(f"Could not find model '{model_name}' in dropdown")
+                return False
+                
+            except Exception as e:
+                logger.error(f"Error selecting model from dropdown: {e}")
+                return False
+        
+        def _get_legacy_mode_for_model(self, model_name: str):
+            """Get legacy mode mapping for fallback"""
+            legacy_mapping = {
                 "standard_v2": Mode.STANDARD,
                 "high_fidelity_v2": Mode.HIGH_FIDELITY,
                 "low_resolution_v2": Mode.LOW_RESOLUTION,
                 "text_refine": Mode.TEXT_AND_SHAPES,
                 "cgi": Mode.ART_AND_CG,
-                "redefine": Mode.STANDARD,  # Generative - map to closest legacy
                 "recovery": Mode.RECOVERY,
                 "recovery_v2": Mode.RECOVERY,
-                
-                # Sharpen models - map to Standard mode
-                "sharpen_standard": Mode.STANDARD,
-                "sharpen_strong": Mode.STANDARD,
-                "lens_blur": Mode.STANDARD,
-                "lens_blur_v2": Mode.STANDARD,
-                "motion_blur": Mode.STANDARD,
-                "natural": Mode.STANDARD,
-                "refocus": Mode.STANDARD,
-                "super_focus": Mode.STANDARD,
-                "super_focus_v2": Mode.STANDARD,
-                
-                # Denoise models - map to Standard mode
-                "denoise_normal": Mode.STANDARD,
-                "denoise_strong": Mode.STANDARD,
-                "denoise_extreme": Mode.STANDARD,
-                
-                # Restore models - map to Recovery mode
-                "dust_scratch": Mode.RECOVERY,
-                
-                # Lighting models - map to Standard mode
-                "lighting_adjust": Mode.STANDARD,
-                "white_balance": Mode.STANDARD,
             }
-            
-            legacy_mode = legacy_mapping.get(model.name)
-            if legacy_mode:
-                logger.debug(f"Mapping {model.name} to legacy mode: {legacy_mode.value}")
-                self._set_mode(legacy_mode)
-            else:
-                # Default fallback to Standard mode
-                logger.warning(f"No specific mapping for {model.name}, using Standard mode")
-                self._set_mode(Mode.STANDARD)
+            return legacy_mapping.get(model_name, Mode.STANDARD)
         
         @log("Saving photo to specific path", "Photo saved to path", level=Level.DEBUG)
         def save_photo_to_path(self, output_path: Path) -> None:
