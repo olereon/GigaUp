@@ -15,6 +15,7 @@ from .models import ModelCategory, AIModel
 from .factory import get_model_factory
 from .parameters import ProcessingParameters
 from .exceptions import GigapixelException
+from .suffix_generator import generate_auto_suffix, parse_suffix_mode
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -72,7 +73,7 @@ def create_parser() -> argparse.ArgumentParser:
         help="Target width in pixels (max 16384, maintains aspect ratio)"
     )
     size_group.add_argument(
-        "-h", "--height", 
+        "--height", 
         type=int,
         help="Target height in pixels (max 16384, maintains aspect ratio)"
     )
@@ -151,7 +152,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     
     parser.add_argument(
-        "-q", "--quiet",
+        "--quiet",
         action="store_true",
         help="Suppress output except errors"
     )
@@ -177,7 +178,7 @@ def list_models():
     for category in categories:
         models = factory.get_models_by_category(category)
         if models:
-            print(f"\\n{category.value}:")
+            print(f"\n{category.value}:")
             print("-" * (len(category.value) + 1))
             
             for model in models:
@@ -189,7 +190,7 @@ def list_models():
                     desc = model.description
                 print(f"      {desc}")
     
-    print("\\nLegend: [S] = Standard, [G] = Generative")
+    print("\nLegend: [S] = Standard, [G] = Generative")
 
 
 def show_model_info(model_name: str):
@@ -206,7 +207,7 @@ def show_model_info(model_name: str):
         print(f"Description: {model.description}")
         
         if model.parameters:
-            print("\\nParameters:")
+            print("\nParameters:")
             print("-" * 11)
             for param_name, param_def in model.parameters.items():
                 print(f"  {param_name}:")
@@ -221,7 +222,7 @@ def show_model_info(model_name: str):
                     print(f"    Max length: {param_def.max_length}")
                 print()
         else:
-            print("\\nNo configurable parameters.")
+            print("\nNo configurable parameters.")
             
     except Exception as e:
         print(f"Error: Model '{model_name}' not found. Use --list-models to see available models.")
@@ -397,9 +398,28 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
         print("Error: Must specify --model, --preset, or --legacy-mode")
         sys.exit(1)
     
+    # Generate output filenames with suffix/prefix handling
+    validated_size = validate_dimensions(args)
+    suffix_config = parse_suffix_mode(args.suffix)
+    
     # Create jobs
     for input_file in input_files:
-        output_file = output_dir / f"enhanced_{input_file.name}"
+        # Generate base filename
+        base_name = input_file.stem
+        extension = input_file.suffix
+        
+        # Generate suffix
+        if suffix_config["mode"] == "auto":
+            auto_suffix = generate_auto_suffix(parameters, validated_size, args.quality)
+        elif suffix_config["mode"] == "custom":
+            auto_suffix = suffix_config["value"]
+        else:
+            auto_suffix = ""
+        
+        # Build output filename
+        output_name = f"{args.prefix}{base_name}{auto_suffix}{extension}"
+        output_file = output_dir / output_name
+        
         job = ProcessingJob(
             input_path=input_file,
             output_path=output_file,
@@ -461,7 +481,7 @@ def main():
     
     # Dry run mode
     if args.dry_run:
-        print("\\nDry run - showing what would be processed:")
+        print("\nDry run - showing what would be processed:")
         print("=" * 45)
         for i, job in enumerate(jobs, 1):
             print(f"{i:3d}. {job.input_path.name}")
@@ -483,7 +503,7 @@ def main():
         
         # Process jobs
         if not args.quiet:
-            print(f"\\nProcessing {len(jobs)} files...")
+            print(f"\nProcessing {len(jobs)} files...")
         
         class CLICallback:
             def __init__(self, quiet=False, verbose=False):
@@ -513,7 +533,7 @@ def main():
                 completed = len([j for j in jobs if j.status == "completed"])
                 failed = len([j for j in jobs if j.status == "error"])
                 if not self.quiet:
-                    print(f"\\nBatch completed: {completed} successful, {failed} failed")
+                    print(f"\nBatch completed: {completed} successful, {failed} failed")
         
         # Add callback
         callback = CLICallback(args.quiet, args.verbose)
@@ -527,7 +547,7 @@ def main():
         failed = len([j for j in completed_jobs if j.status == "error"])
         
         if not args.quiet:
-            print(f"\\nProcessing completed:")
+            print(f"\nProcessing completed:")
             print(f"  Successful: {successful}")
             print(f"  Failed: {failed}")
             print(f"  Total: {len(completed_jobs)}")
@@ -537,7 +557,7 @@ def main():
             sys.exit(1)
             
     except KeyboardInterrupt:
-        print("\\nProcessing interrupted by user")
+        print("\nProcessing interrupted by user")
         sys.exit(1)
     except GigapixelException as e:
         print(f"Gigapixel error: {e}")
