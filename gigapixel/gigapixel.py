@@ -617,6 +617,7 @@ class Gigapixel:
                 else:
                     # Custom scale value - use the Scale factor input field
                     logger.debug(f"Setting custom scale factor: {scale}")
+                    import time  # Ensure time is imported
                     
                     # Find and set the Scale factor input field directly
                     scale_factor_set = False
@@ -670,11 +671,36 @@ class Gigapixel:
                     except Exception as e:
                         logger.debug(f"Method 1 failed: {e}")
                     
-                    # Method 2: Try to find by looking for numeric Edit controls
+                    # Method 2: Try the second Edit control (based on user feedback)
                     if not scale_factor_set:
                         try:
                             all_edits = self._main_window.descendants(control_type="Edit")
-                            for edit in all_edits:
+                            if len(all_edits) >= 2:
+                                # Try the second edit control (index 1)
+                                edit = all_edits[1]
+                                logger.debug("Trying second Edit control based on user feedback")
+                                
+                                # Click the input field to activate it
+                                edit.click_input()
+                                time.sleep(0.3)
+                                
+                                # Select all and type new value
+                                send_keys('^a')  # Select all
+                                time.sleep(0.1)
+                                send_keys(scale)  # Type the scale value
+                                time.sleep(0.1)
+                                send_keys('{ENTER}')  # Confirm
+                                
+                                logger.debug(f"✓ Set scale factor to {scale} using second Edit control")
+                                scale_factor_set = True
+                        except Exception as e:
+                            logger.debug(f"Method 2 (second Edit control) failed: {e}")
+                    
+                    # Method 3: Try to find by looking for numeric Edit controls
+                    if not scale_factor_set:
+                        try:
+                            all_edits = self._main_window.descendants(control_type="Edit")
+                            for i, edit in enumerate(all_edits):
                                 try:
                                     # Check if it's visible and enabled
                                     if edit.is_visible() and edit.is_enabled():
@@ -683,6 +709,8 @@ class Gigapixel:
                                             current_value = edit.get_value()
                                         except:
                                             pass
+                                        
+                                        logger.debug(f"Checking Edit control {i}: value='{current_value}'")
                                         
                                         # Check if it looks like a scale input (numeric or empty)
                                         if current_value == "" or (current_value.replace(".", "").replace(",", "").isdigit()):
@@ -696,15 +724,15 @@ class Gigapixel:
                                             time.sleep(0.1)
                                             send_keys('{ENTER}')  # Confirm
                                             
-                                            logger.debug(f"✓ Set scale factor to {scale} using numeric edit field")
+                                            logger.debug(f"✓ Set scale factor to {scale} using Edit control {i}")
                                             scale_factor_set = True
                                             break
                                 except:
                                     continue
                         except Exception as e:
-                            logger.debug(f"Method 2 failed: {e}")
+                            logger.debug(f"Method 3 failed: {e}")
                     
-                    # Method 3: Click Custom button first, then try to find the input
+                    # Method 4: Click Custom button first, then try to find the input
                     if not scale_factor_set:
                         try:
                             custom_button = self._main_window.child_window(title="Custom", control_type="Button")
