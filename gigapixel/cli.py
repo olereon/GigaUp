@@ -60,11 +60,21 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show detailed information about a specific model"
     )
     
-    # Scale options
-    parser.add_argument(
+    # Size options (mutually exclusive)
+    size_group = parser.add_mutually_exclusive_group()
+    size_group.add_argument(
         "-s", "--scale",
-        default="2x",
-        help="Scale factor for upscaling (e.g., 1x, 2x, 4x, 6x, 1.5, 3.5) (default: 2x)"
+        help="Scale factor for upscaling (e.g., 1x, 2x, 4x, 6x, 1.5, 3.5)"
+    )
+    size_group.add_argument(
+        "-w", "--width",
+        type=int,
+        help="Target width in pixels (max 16384, maintains aspect ratio)"
+    )
+    size_group.add_argument(
+        "-h", "--height", 
+        type=int,
+        help="Target height in pixels (max 16384, maintains aspect ratio)"
     )
     
     # Parameters
@@ -88,6 +98,27 @@ def create_parser() -> argparse.ArgumentParser:
         "--list-presets",
         action="store_true",
         help="List all saved presets and exit"
+    )
+    
+    # Export options
+    parser.add_argument(
+        "-q", "--quality",
+        type=int,
+        choices=range(1, 101),
+        default=95,
+        help="Output image quality (1-100, default: 95)"
+    )
+    
+    parser.add_argument(
+        "--suffix",
+        default="auto",
+        help="Output filename suffix: 0=empty+toggle off, 1=empty+toggle on, 'string'=custom suffix+toggle off, 'auto'=generate suffix from parameters (default: auto)"
+    )
+    
+    parser.add_argument(
+        "--prefix",
+        default="",
+        help="Output filename prefix (default: empty)"
     )
     
     # Legacy compatibility
@@ -243,6 +274,31 @@ def validate_scale(scale_str: str) -> str:
         sys.exit(1)
 
 
+def validate_dimensions(args) -> str:
+    """Validate dimension arguments and return the appropriate size parameter"""
+    size_count = sum([bool(args.scale), bool(args.width), bool(args.height)])
+    
+    if size_count == 0:
+        # Default to 2x scale
+        return "2x"
+    elif size_count > 1:
+        print("Error: Multiple image size values. Please provide only one of: --scale, --width, or --height")
+        sys.exit(1)
+    
+    if args.scale:
+        return validate_scale(args.scale)
+    elif args.width:
+        if args.width <= 0 or args.width > 16384:
+            print(f"Error: Width must be between 1 and 16384, got {args.width}")
+            sys.exit(1)
+        return f"w{args.width}"
+    elif args.height:
+        if args.height <= 0 or args.height > 16384:
+            print(f"Error: Height must be between 1 and 16384, got {args.height}")
+            sys.exit(1)
+        return f"h{args.height}"
+
+
 def parse_parameters(param_string: str) -> Dict[str, Any]:
     """Parse parameters from JSON string or file"""
     if not param_string:
@@ -323,8 +379,8 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
     elif args.legacy_mode:
         # Use legacy mode
         try:
-            validated_scale = validate_scale(args.scale)
-            parameters = factory.create_from_legacy(args.legacy_mode, validated_scale)
+            validated_size = validate_dimensions(args)
+            parameters = factory.create_from_legacy(args.legacy_mode, validated_size)
         except Exception as e:
             print(f"Error creating parameters from legacy mode: {e}")
             sys.exit(1)
@@ -332,8 +388,8 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
         # Use specified model
         try:
             parsed_params = parse_parameters(args.parameters) if args.parameters else {}
-            validated_scale = validate_scale(args.scale)
-            parameters = factory.create_processing_parameters(args.model, parsed_params, validated_scale)
+            validated_size = validate_dimensions(args)
+            parameters = factory.create_processing_parameters(args.model, parsed_params, validated_size)
         except Exception as e:
             print(f"Error creating processing parameters: {e}")
             sys.exit(1)

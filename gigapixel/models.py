@@ -62,9 +62,9 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="General-purpose model balancing detail, sharpness, and noise reduction for various images.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "decimal", 0.0, 1.0, 0.0, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "decimal", 0.0, 1.0, 0.0, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "decimal", 0.0, 1.0, 0.0, "Reduces compression artifacts to improve details")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details")
         }
     )
     
@@ -75,9 +75,9 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Enhances clarity and detail in low-resolution images like web graphics and screenshots.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "decimal", 0.0, 1.0, 0.0, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "decimal", 0.0, 1.0, 0.0, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "decimal", 0.0, 1.0, 0.0, "Reduces compression artifacts to improve details")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details")
         }
     )
     
@@ -88,8 +88,8 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Optimized for CGI and digital illustrations, enhancing texture and detail in computer-generated images.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "decimal", 0.0, 1.0, 0.0, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "decimal", 0.0, 1.0, 0.0, "Reduces noise in the image")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image")
         }
     )
     
@@ -100,9 +100,10 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Ideal for high-quality images, preserving intricate details in professional photography.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "decimal", 0.0, 1.0, 0.0, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "decimal", 0.0, 1.0, 0.0, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "decimal", 0.0, 1.0, 0.0, "Reduces compression artifacts to improve details")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
     
@@ -123,41 +124,42 @@ class EnhanceStandardModel(Enum):
 
 class EnhanceGenerativeModel(Enum):
     """Generative Enhance Models"""
-    REDEFINE = AIModel(
-        name="redefine",
-        display_name="Redefine",
-        category=ModelCategory.ENHANCE,
-        model_class=ModelClass.GENERATIVE,
-        description="Elevate creativity with realistic upscaling, prioritizing either fidelity or creative detail. Ideal for low-resolution, blurry, and AI-generated images.",
-        parameters={
-            "prompt": ModelParameter("prompt", "text", max_length=1024, description="A description of the resulting image you are looking for"),
-            "autoprompt": ModelParameter("autoprompt", "boolean", default_value=False, description="Auto-generate a prompt using state-of-the-art autoprompting model"),
-            "creativity": ModelParameter("creativity", "integer", 1, 6, 3, "Lower values maintain highest fidelity. Higher values provide more creative results"),
-            "texture": ModelParameter("texture", "integer", 1, 5, 1, "Add texture to the image. Recommend 1 for low creativity, 3 for high creativity"),
-            "sharpen": ModelParameter("sharpen", "decimal", 0.0, 1.0, 0.0, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "decimal", 0.0, 1.0, 0.0, "Reduces noise in the image")
-        }
-    )
-    
-    RECOVERY = AIModel(
-        name="recovery",
-        display_name="Recovery",
+    RECOVER = AIModel(
+        name="recover",
+        display_name="Recover",
         category=ModelCategory.ENHANCE,
         model_class=ModelClass.GENERATIVE,
         description="Delivers high fidelity upscaling for extremely low-resolution images, preserving natural detail and sharpness.",
         parameters={
-            "detail": ModelParameter("detail", "decimal", 0.0, 1.0, 0.5, "Adjusts the level of added detail after rendering")
+            "version": ModelParameter("version", "text", default_value="v2", description="Version v1 or v2 (New)"),
+            "detail": ModelParameter("detail", "integer", 0, 100, 50, "Adjusts the level of added detail after rendering"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
         }
     )
     
-    RECOVERY_V2 = AIModel(
-        name="recovery_v2",
-        display_name="Recovery V2",
+    REDEFINE_REALISTIC = AIModel(
+        name="redefine_realistic",
+        display_name="Redefine Realistic",
         category=ModelCategory.ENHANCE,
         model_class=ModelClass.GENERATIVE,
-        description="Newest model that delivers high fidelity upscaling for extremely low-resolution images, preserving natural detail and sharpness.",
+        description="Realistic upscaling with subtle enhancement options.",
         parameters={
-            "detail": ModelParameter("detail", "decimal", 0.0, 1.0, 0.5, "Adjusts the level of added detail after rendering")
+            "enhancement": ModelParameter("enhancement", "text", default_value="None", description="Enhancement level: None or Subtle"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
+        }
+    )
+    
+    REDEFINE_CREATIVE = AIModel(
+        name="redefine_creative",
+        display_name="Redefine Creative",
+        category=ModelCategory.ENHANCE,
+        model_class=ModelClass.GENERATIVE,
+        description="Creative upscaling with customizable creativity levels and texture control.",
+        parameters={
+            "creativity": ModelParameter("creativity", "text", default_value="Medium", description="Creativity level: Low, Medium, High, or Max"),
+            "image_description": ModelParameter("image_description", "text", max_length=1024, default_value="", description="Guiding prompt for image description"),
+            "texture": ModelParameter("texture", "integer", 1, 5, 1, "Texture level from 1 to 5"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
         }
     )
 
