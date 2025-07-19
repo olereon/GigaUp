@@ -612,14 +612,74 @@ class Gigapixel:
                         break
                 
                 if scale_enum:
+                    # Use standard scale button (1x, 2x, 4x, 6x)
                     self._set_scale(scale_enum)
                 else:
-                    # Try to find scale button directly by string
-                    scale_button = self._main_window.child_window(title=scale)
-                    scale_button.click_input()
-                    logger.debug(f"Scale set to {scale}")
-            except ElementNotFoundError:
-                raise ElementNotFound(f"Scale button {scale} not found")
+                    # Custom scale value - use the Scale factor input field
+                    logger.debug(f"Setting custom scale factor: {scale}")
+                    
+                    # First, try to find and click the Custom button to enable the input field
+                    try:
+                        custom_button = self._main_window.child_window(title="Custom", control_type="Button")
+                        custom_button.click_input()
+                        logger.debug("✓ Clicked Custom scale button")
+                        import time
+                        time.sleep(0.5)  # Wait for UI to update
+                    except ElementNotFoundError:
+                        logger.debug("Custom button not found, trying to set scale factor directly")
+                    
+                    # Now find and set the Scale factor input field
+                    scale_factor_set = False
+                    
+                    # Method 1: Try to find by title "Scale factor"
+                    try:
+                        scale_input = self._main_window.child_window(title="Scale factor", control_type="Edit")
+                        scale_input.set_text(scale)
+                        logger.debug(f"✓ Set scale factor to {scale} using 'Scale factor' edit field")
+                        scale_factor_set = True
+                    except ElementNotFoundError:
+                        pass
+                    
+                    # Method 2: Try to find any Edit control near the scale buttons
+                    if not scale_factor_set:
+                        try:
+                            # Look for the Upscale section first
+                            upscale_section = self._main_window.child_window(title="Upscale")
+                            # Find an edit control within it
+                            scale_input = upscale_section.child_window(control_type="Edit")
+                            scale_input.set_text(scale)
+                            logger.debug(f"✓ Set scale factor to {scale} using edit field in Upscale section")
+                            scale_factor_set = True
+                        except ElementNotFoundError:
+                            pass
+                    
+                    # Method 3: Try to find any numeric input field that might be the scale factor
+                    if not scale_factor_set:
+                        try:
+                            # Get all edit controls
+                            all_edits = self._main_window.children(control_type="Edit")
+                            # Look for one that might contain a numeric value or is empty
+                            for edit in all_edits:
+                                try:
+                                    current_value = edit.get_value()
+                                    # Check if it's numeric or empty (likely to be scale factor field)
+                                    if current_value == "" or current_value.replace(".", "").isdigit():
+                                        edit.set_text(scale)
+                                        logger.debug(f"✓ Set scale factor to {scale} using numeric edit field")
+                                        scale_factor_set = True
+                                        break
+                                except:
+                                    continue
+                        except:
+                            pass
+                    
+                    if not scale_factor_set:
+                        raise ElementNotFound(f"Could not find Scale factor input field to set custom scale: {scale}")
+                        
+                    logger.debug(f"✓ Custom scale successfully set to {scale}")
+                    
+            except ElementNotFoundError as e:
+                raise ElementNotFound(f"Scale setting failed for {scale}: {e}")
         
         def _set_model_parameters(self, parameters: ProcessingParameters):
             """Set model-specific parameters in the UI"""

@@ -253,6 +253,62 @@ class GigaUpWindow:
             radio_btn.pack(side="left", padx=10)
             
             ToolTip(radio_btn, f"Upscale images by {scale}")
+        
+        # Add custom scale option
+        custom_radio = ttk.Radiobutton(scale_buttons_frame, text="Custom", 
+                                      variable=self.scale_var, value="custom")
+        custom_radio.pack(side="left", padx=10)
+        ToolTip(custom_radio, "Use a custom scale factor")
+        
+        # Custom scale input frame
+        custom_frame = ttk.Frame(scale_frame)
+        custom_frame.pack(fill="x", pady=5)
+        
+        ttk.Label(custom_frame, text="Custom Scale:").pack(side="left", padx=(0, 5))
+        
+        self.custom_scale_var = tk.StringVar(value="1.5")
+        self.custom_scale_entry = ttk.Entry(custom_frame, textvariable=self.custom_scale_var, width=10)
+        self.custom_scale_entry.pack(side="left", padx=(0, 5))
+        
+        ToolTip(self.custom_scale_entry, "Enter custom scale factor (e.g., 1.33, 1.5, 3, 5)")
+        
+        # Update custom scale when entry changes
+        def on_custom_scale_change(*args):
+            if self.scale_var.get() == "custom":
+                # Validate the custom scale value
+                try:
+                    scale_value = float(self.custom_scale_var.get())
+                    if scale_value <= 0:
+                        self.custom_scale_var.set("1.5")
+                except ValueError:
+                    self.custom_scale_var.set("1.5")
+        
+        self.custom_scale_var.trace("w", on_custom_scale_change)
+        
+        # Enable custom entry when custom radio is selected
+        def on_scale_change(*args):
+            if self.scale_var.get() == "custom":
+                self.custom_scale_entry.configure(state="normal")
+            else:
+                self.custom_scale_entry.configure(state="disabled")
+        
+        self.scale_var.trace("w", on_scale_change)
+        on_scale_change()  # Initialize state
+    
+    def get_scale_value(self):
+        """Get the actual scale value, handling custom scale"""
+        scale = self.scale_var.get()
+        if scale == "custom":
+            try:
+                custom_value = float(self.custom_scale_var.get())
+                if custom_value > 0:
+                    return str(custom_value)
+                else:
+                    return "2x"  # Default fallback
+            except ValueError:
+                return "2x"  # Default fallback
+        else:
+            return scale
     
     def create_preset_section(self, parent):
         """Create preset management section"""
@@ -554,7 +610,7 @@ class GigaUpWindow:
         parameters = self.model_factory.create_processing_parameters(
             self.selected_model.name,
             current_params,
-            self.scale_var.get()
+            self.get_scale_value()
         )
         
         # Parse input paths
@@ -661,7 +717,7 @@ class GigaUpWindow:
             parameters = self.model_factory.create_processing_parameters(
                 self.selected_model.name,
                 current_params,
-                self.scale_var.get()
+                self.get_scale_value()
             )
             
             # Save preset
