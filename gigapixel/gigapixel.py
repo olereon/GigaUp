@@ -618,54 +618,109 @@ class Gigapixel:
                     # Custom scale value - use the Scale factor input field
                     logger.debug(f"Setting custom scale factor: {scale}")
                     
-                    # First, try to find and click the Custom button to enable the input field
-                    try:
-                        custom_button = self._main_window.child_window(title="Custom", control_type="Button")
-                        custom_button.click_input()
-                        logger.debug("✓ Clicked Custom scale button")
-                        import time
-                        time.sleep(0.5)  # Wait for UI to update
-                    except ElementNotFoundError:
-                        logger.debug("Custom button not found, trying to set scale factor directly")
-                    
-                    # Now find and set the Scale factor input field
+                    # Find and set the Scale factor input field directly
                     scale_factor_set = False
                     
-                    # Method 1: Try to find by title "Scale factor"
+                    # Method 1: Look for Scale factor text and find nearby Edit control
                     try:
-                        scale_input = self._main_window.child_window(title="Scale factor", control_type="Edit")
-                        scale_input.set_text(scale)
-                        logger.debug(f"✓ Set scale factor to {scale} using 'Scale factor' edit field")
-                        scale_factor_set = True
-                    except ElementNotFoundError:
-                        pass
-                    
-                    # Method 2: Try to find any Edit control near the scale buttons
-                    if not scale_factor_set:
-                        try:
-                            # Look for the Upscale section first
-                            upscale_section = self._main_window.child_window(title="Upscale")
-                            # Find an edit control within it
-                            scale_input = upscale_section.child_window(control_type="Edit")
-                            scale_input.set_text(scale)
-                            logger.debug(f"✓ Set scale factor to {scale} using edit field in Upscale section")
-                            scale_factor_set = True
-                        except ElementNotFoundError:
-                            pass
-                    
-                    # Method 3: Try to find any numeric input field that might be the scale factor
-                    if not scale_factor_set:
-                        try:
-                            # Get all edit controls
-                            all_edits = self._main_window.children(control_type="Edit")
-                            # Look for one that might contain a numeric value or is empty
+                        # Find the "Scale factor" text element
+                        scale_texts = self._main_window.descendants(control_type="Text")
+                        scale_factor_text = None
+                        
+                        for text in scale_texts:
+                            try:
+                                if text.element_info.name and "Scale factor" in text.element_info.name:
+                                    scale_factor_text = text
+                                    logger.debug("Found 'Scale factor' text element")
+                                    break
+                            except:
+                                continue
+                        
+                        if scale_factor_text:
+                            # Get position of the text
+                            text_rect = scale_factor_text.rectangle()
+                            
+                            # Find Edit controls near this text (to the right)
+                            all_edits = self._main_window.descendants(control_type="Edit")
                             for edit in all_edits:
                                 try:
-                                    current_value = edit.get_value()
-                                    # Check if it's numeric or empty (likely to be scale factor field)
-                                    if current_value == "" or current_value.replace(".", "").isdigit():
-                                        edit.set_text(scale)
-                                        logger.debug(f"✓ Set scale factor to {scale} using numeric edit field")
+                                    edit_rect = edit.rectangle()
+                                    # Check if edit is to the right of text and at similar height
+                                    if (edit_rect.left > text_rect.left and 
+                                        edit_rect.left < text_rect.left + 200 and
+                                        abs(edit_rect.top - text_rect.top) < 50):
+                                        
+                                        # Click the input field to activate it
+                                        edit.click_input()
+                                        time.sleep(0.3)
+                                        
+                                        # Select all and type new value
+                                        send_keys('^a')  # Select all
+                                        time.sleep(0.1)
+                                        send_keys(scale)  # Type the scale value
+                                        time.sleep(0.1)
+                                        send_keys('{ENTER}')  # Confirm
+                                        
+                                        logger.debug(f"✓ Set scale factor to {scale} using input field near 'Scale factor' text")
+                                        scale_factor_set = True
+                                        break
+                                except Exception as e:
+                                    logger.debug(f"Error with edit control: {e}")
+                                    continue
+                    except Exception as e:
+                        logger.debug(f"Method 1 failed: {e}")
+                    
+                    # Method 2: Try to find by looking for numeric Edit controls
+                    if not scale_factor_set:
+                        try:
+                            all_edits = self._main_window.descendants(control_type="Edit")
+                            for edit in all_edits:
+                                try:
+                                    # Check if it's visible and enabled
+                                    if edit.is_visible() and edit.is_enabled():
+                                        current_value = ""
+                                        try:
+                                            current_value = edit.get_value()
+                                        except:
+                                            pass
+                                        
+                                        # Check if it looks like a scale input (numeric or empty)
+                                        if current_value == "" or (current_value.replace(".", "").replace(",", "").isdigit()):
+                                            # Try to click and set value
+                                            edit.click_input()
+                                            time.sleep(0.3)
+                                            
+                                            send_keys('^a')  # Select all
+                                            time.sleep(0.1)
+                                            send_keys(scale)  # Type the scale value
+                                            time.sleep(0.1)
+                                            send_keys('{ENTER}')  # Confirm
+                                            
+                                            logger.debug(f"✓ Set scale factor to {scale} using numeric edit field")
+                                            scale_factor_set = True
+                                            break
+                                except:
+                                    continue
+                        except Exception as e:
+                            logger.debug(f"Method 2 failed: {e}")
+                    
+                    # Method 3: Click Custom button first, then try to find the input
+                    if not scale_factor_set:
+                        try:
+                            custom_button = self._main_window.child_window(title="Custom", control_type="Button")
+                            custom_button.click_input()
+                            logger.debug("Clicked Custom button")
+                            time.sleep(0.5)
+                            
+                            # Now try to find any active Edit control
+                            all_edits = self._main_window.descendants(control_type="Edit")
+                            for edit in all_edits:
+                                try:
+                                    if edit.has_keyboard_focus() or edit.is_enabled():
+                                        edit.click_input()
+                                        time.sleep(0.2)
+                                        send_keys('^a' + scale + '{ENTER}')
+                                        logger.debug(f"✓ Set scale factor to {scale} after clicking Custom")
                                         scale_factor_set = True
                                         break
                                 except:
