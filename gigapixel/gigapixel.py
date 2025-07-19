@@ -869,13 +869,49 @@ class Gigapixel:
         
         def _set_parameter_value(self, param_name: str, value: Any):
             """Set a specific parameter value in the UI"""
+            # Map parameter names to their UI display names
+            param_display_mapping = {
+                "sharpen": "Sharpen",
+                "denoise": "Denoise", 
+                "fix_compression": "Fix compression",
+                "face_recovery": "Face recovery",
+                "strength": "Strength",
+                "minor_denoise": "Minor denoise",
+                "minor_deblur": "Minor deblur",
+                "original_detail": "Original detail",
+                "detail": "Detail",
+                "texture": "Texture",
+                "creativity": "Creativity",
+                "enhancement": "Enhancement",
+                "version": "Version"
+            }
+            
+            display_name = param_display_mapping.get(param_name, param_name.title())
+            
             try:
-                # This is a simplified implementation
-                # In reality, you'd need specific UI automation for each parameter type
+                # Try multiple strategies to find the parameter control
+                param_control = None
                 
-                # Try to find parameter control by name
-                param_control = self._main_window.child_window(title=param_name)
+                # Strategy 1: Try exact title match
+                try:
+                    param_control = self._main_window.child_window(title=display_name)
+                except ElementNotFoundError:
+                    pass
                 
+                # Strategy 2: Try case-insensitive partial match
+                if param_control is None:
+                    try:
+                        param_control = self._main_window.child_window(title_re=f".*{display_name}.*", control_type="Edit")
+                    except ElementNotFoundError:
+                        pass
+                
+                # Strategy 3: Debug mode - show all available controls if none found
+                if param_control is None:
+                    logger.warning(f"Could not find UI control for parameter: {param_name} (looking for '{display_name}')")
+                    self._debug_show_parameter_controls(param_name, display_name)
+                    return
+                
+                # Set the value based on type
                 if isinstance(value, bool):
                     # Handle checkbox/toggle
                     if value:
@@ -889,12 +925,164 @@ class Gigapixel:
                     # Handle text input
                     param_control.set_text(value)
                 
-                logger.debug(f"Parameter {param_name} set to {value}")
+                logger.debug(f"Parameter {param_name} ('{display_name}') set to {value}")
                 
-            except ElementNotFoundError:
-                logger.warning(f"Could not find UI control for parameter: {param_name}")
             except Exception as e:
                 logger.warning(f"Could not set parameter {param_name}: {e}")
+        
+        def _debug_show_parameter_controls(self, param_name: str, display_name: str):
+            """Debug function to show all interactive controls and allow manual selection"""
+            try:
+                logger.info(f"=== DEBUG: Finding controls for parameter '{param_name}' ('{display_name}') ===")
+                
+                # Get all interactive controls (Edit, Button, CheckBox, ComboBox, etc.)
+                interactive_types = ["Edit", "Button", "CheckBox", "ComboBox", "Slider", "Text"]
+                all_controls = []
+                
+                for control_type in interactive_types:
+                    try:
+                        controls = self._main_window.child_window(control_type=control_type).children()
+                        for ctrl in controls:
+                            try:
+                                title = ctrl.window_text()
+                                rect = ctrl.rectangle()
+                                all_controls.append({
+                                    'control': ctrl,
+                                    'type': control_type,
+                                    'title': title,
+                                    'rect': rect
+                                })
+                            except:
+                                pass
+                    except:
+                        pass
+                
+                # Filter controls that might be related to our parameter
+                relevant_controls = []
+                search_terms = [display_name.lower(), param_name.lower()]
+                
+                for ctrl_info in all_controls:
+                    title_lower = ctrl_info['title'].lower()
+                    if any(term in title_lower for term in search_terms) or len(title_lower) > 0:
+                        relevant_controls.append(ctrl_info)
+                
+                # Sort by relevance (exact matches first)
+                def relevance_score(ctrl_info):
+                    title_lower = ctrl_info['title'].lower()
+                    if display_name.lower() in title_lower:
+                        return 0  # Highest priority
+                    elif param_name.lower() in title_lower:
+                        return 1
+                    elif any(term in title_lower for term in search_terms):
+                        return 2
+                    else:
+                        return 3
+                
+                relevant_controls.sort(key=relevance_score)
+                
+                logger.info(f"Found {len(relevant_controls)} potentially relevant controls:")
+                for i, ctrl_info in enumerate(relevant_controls[:10]):  # Show top 10
+                    logger.info(f"  {i+1}. Type: {ctrl_info['type']:<10} Title: '{ctrl_info['title']}' Position: {ctrl_info['rect']}")
+                
+                # Interactive mode for manual control selection
+                if hasattr(self, '_debug_ui_mode') and self._debug_ui_mode:
+                    self._interactive_control_selection(param_name, display_name, relevant_controls)
+                else:
+                    logger.info(f"Run with --debug-ui flag for interactive control selection")
+                
+                logger.info(f"=== END DEBUG for '{param_name}' ===")
+                
+            except Exception as e:
+                logger.error(f"Debug function failed: {e}")
+        
+        def _interactive_control_selection(self, param_name: str, display_name: str, controls: list):
+            """Interactive mode to manually select the correct control"""
+            try:
+                import time
+                
+                print(f"\n=== INTERACTIVE MODE: Parameter '{param_name}' ('{display_name}') ===")
+                print(f"Found {len(controls)} potentially relevant controls:")
+                
+                for i, ctrl_info in enumerate(controls[:10]):
+                    print(f"  {i+1}. Type: {ctrl_info['type']:<10} Title: '{ctrl_info['title']}' Position: {ctrl_info['rect']}")
+                
+                print("\nOptions:")
+                print("  1-10: Select control by number")
+                print("  h: Highlight controls one by one")
+                print("  s: Skip this parameter")
+                print("  q: Quit debugging")
+                
+                while True:
+                    choice = input(f"\nSelect action for '{param_name}': ").strip().lower()
+                    
+                    if choice == 'q':
+                        print("Exiting debug mode...")
+                        return
+                    elif choice == 's':
+                        print(f"Skipping parameter '{param_name}'")
+                        return
+                    elif choice == 'h':
+                        self._highlight_controls_sequentially(controls)
+                    elif choice.isdigit():
+                        idx = int(choice) - 1
+                        if 0 <= idx < len(controls) and idx < 10:
+                            selected_ctrl = controls[idx]
+                            print(f"Selected: {selected_ctrl['type']} - '{selected_ctrl['title']}'")
+                            
+                            # Highlight the selected control
+                            try:
+                                selected_ctrl['control'].draw_outline(color='red', thickness=3)
+                                time.sleep(2)
+                                print("Control highlighted in red for 2 seconds")
+                            except:
+                                pass
+                            
+                            confirm = input("Is this the correct control? (y/n): ").strip().lower()
+                            if confirm == 'y':
+                                print(f"Confirmed! Control type: {selected_ctrl['type']}, Title: '{selected_ctrl['title']}'")
+                                print(f"Add this mapping to the code:")
+                                print(f'  "{param_name}": "{selected_ctrl[\"title\"]}"')
+                                return
+                        else:
+                            print("Invalid selection. Try again.")
+                    else:
+                        print("Invalid option. Try again.")
+                        
+            except KeyboardInterrupt:
+                print("\nInterrupted by user")
+            except Exception as e:
+                logger.error(f"Interactive selection failed: {e}")
+        
+        def _highlight_controls_sequentially(self, controls: list):
+            """Highlight controls one by one for visual identification"""
+            try:
+                import time
+                
+                print("\nHighlighting controls one by one (press Enter to continue, 'q' to stop)...")
+                
+                for i, ctrl_info in enumerate(controls[:10]):
+                    print(f"\nHighlighting #{i+1}: {ctrl_info['type']} - '{ctrl_info['title']}'")
+                    
+                    try:
+                        # Highlight the control
+                        ctrl_info['control'].draw_outline(color='red', thickness=3)
+                        
+                        choice = input("Press Enter for next, 'q' to stop, or number to select: ").strip()
+                        if choice.lower() == 'q':
+                            break
+                        elif choice.isdigit():
+                            idx = int(choice) - 1
+                            if idx == i:
+                                print(f"Selected current control: {ctrl_info['title']}")
+                                return ctrl_info
+                            
+                    except Exception as e:
+                        print(f"Could not highlight control: {e}")
+                        
+                print("Finished highlighting controls")
+                
+            except Exception as e:
+                logger.error(f"Sequential highlighting failed: {e}")
         
         def _set_model_via_legacy_mapping(self, model: AIModel):
             """Set model using the new dropdown-based model selection"""

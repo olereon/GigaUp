@@ -162,6 +162,12 @@ def create_parser() -> argparse.ArgumentParser:
         help="Show what would be processed without actually processing"
     )
     
+    parser.add_argument(
+        "--debug-ui",
+        action="store_true",
+        help="Enable UI debugging mode to manually identify parameter controls"
+    )
+    
     return parser
 
 
@@ -545,6 +551,10 @@ def main():
             print(f"Initializing Gigapixel with executable: {args.executable}")
         
         gigapixel = Gigapixel(args.executable, args.timeout)
+        
+        # Enable debug UI mode if requested
+        if args.debug_ui:
+            gigapixel._app._debug_ui_mode = True
         
         # Process jobs
         if not args.quiet:
