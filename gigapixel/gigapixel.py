@@ -602,8 +602,13 @@ class Gigapixel:
             self._set_model_parameters(parameters)
         
         def _set_scale_advanced(self, scale: str):
-            """Set scale using string value"""
+            """Set scale using string value (supports scale, width, height)"""
             try:
+                # Check if it's a width or height parameter
+                if scale.startswith('w') or scale.startswith('h'):
+                    self._set_dimension(scale)
+                    return
+                
                 # Convert string to Scale enum for backward compatibility
                 scale_enum = None
                 for s in Scale:
@@ -763,6 +768,83 @@ class Gigapixel:
                     
             except ElementNotFoundError as e:
                 raise ElementNotFound(f"Scale setting failed for {scale}: {e}")
+        
+        def _set_dimension(self, dimension: str):
+            """Set width or height dimension"""
+            import time
+            
+            try:
+                dimension_type = dimension[0]  # 'w' or 'h'
+                dimension_value = dimension[1:]  # numeric value
+                
+                logger.debug(f"Setting {dimension_type}{'width' if dimension_type == 'w' else 'height'} to {dimension_value}")
+                
+                # Find the appropriate input field
+                # Look for Width or Height text elements and nearby edit controls
+                all_texts = self._main_window.descendants(control_type="Text")
+                target_text = "Width" if dimension_type == 'w' else "Height"
+                
+                dimension_text = None
+                for text in all_texts:
+                    try:
+                        if text.element_info.name and target_text in text.element_info.name:
+                            dimension_text = text
+                            logger.debug(f"Found '{target_text}' text element")
+                            break
+                    except:
+                        continue
+                
+                if dimension_text:
+                    # Get position of the text
+                    text_rect = dimension_text.rectangle()
+                    
+                    # Find Edit controls near this text (to the right)
+                    all_edits = self._main_window.descendants(control_type="Edit")
+                    for edit in all_edits:
+                        try:
+                            edit_rect = edit.rectangle()
+                            # Check if edit is to the right of text and at similar height
+                            if (edit_rect.left > text_rect.left and 
+                                edit_rect.left < text_rect.left + 200 and
+                                abs(edit_rect.top - text_rect.top) < 50):
+                                
+                                # Click the input field to activate it
+                                edit.click_input()
+                                time.sleep(0.3)
+                                
+                                # Select all and type new value
+                                send_keys('^a')  # Select all
+                                time.sleep(0.1)
+                                send_keys(dimension_value)  # Type the dimension value
+                                time.sleep(0.1)
+                                send_keys('{ENTER}')  # Confirm
+                                
+                                logger.debug(f"✓ Set {target_text.lower()} to {dimension_value}")
+                                return
+                        except Exception as e:
+                            logger.debug(f"Error with edit control: {e}")
+                            continue
+                
+                # Fallback: try to find any edit field that might be for dimensions
+                logger.debug(f"Could not find {target_text} text, trying fallback method")
+                all_edits = self._main_window.descendants(control_type="Edit")
+                for edit in all_edits:
+                    try:
+                        current_value = edit.get_value()
+                        # Look for numeric values that might be dimensions
+                        if current_value and current_value.isdigit():
+                            edit.click_input()
+                            time.sleep(0.3)
+                            send_keys('^a' + dimension_value + '{ENTER}')
+                            logger.debug(f"✓ Set dimension to {dimension_value} using fallback method")
+                            return
+                    except:
+                        continue
+                        
+                raise ElementNotFound(f"Could not find {target_text} input field")
+                
+            except Exception as e:
+                raise ElementNotFound(f"Failed to set {dimension}: {e}")
         
         def _set_model_parameters(self, parameters: ProcessingParameters):
             """Set model-specific parameters in the UI"""
