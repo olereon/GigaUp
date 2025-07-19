@@ -377,7 +377,7 @@ class LegacyMode(Enum):
     LOW_RESOLUTION = EnhanceStandardModel.LOW_RESOLUTION_V2
     TEXT_AND_SHAPES = EnhanceStandardModel.TEXT_REFINE
     ART_AND_CG = EnhanceStandardModel.CGI
-    RECOVERY = EnhanceGenerativeModel.RECOVERY
+    RECOVERY = EnhanceGenerativeModel.RECOVER
 
 
 # Utility functions for model management
