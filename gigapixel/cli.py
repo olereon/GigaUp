@@ -337,22 +337,30 @@ def parse_parameters(param_string: str) -> Dict[str, Any]:
                 # Handle numeric values (no quotes needed)
                 return json.loads(fixed_string)
             except json.JSONDecodeError:
-                # Try alternative parsing using eval (safer with ast.literal_eval)
+                # Try to fix unquoted keys (common when shell strips quotes)
                 try:
-                    import ast
-                    # This handles Python dict syntax which is more forgiving
-                    result = ast.literal_eval(param_string)
-                    if isinstance(result, dict):
-                        return result
-                    else:
-                        raise ValueError("Not a dictionary")
-                except (ValueError, SyntaxError):
-                    print(f"Error parsing parameters: {e}")
-                    print(f"Input received: {repr(param_string)}")
-                    print(f"Examples of valid formats:")
-                    print(f'  JSON: \'{{"sharpen": 66, "denoise": 55}}\'')
-                    print(f"  Python: '{{\"sharpen\": 66, \"denoise\": 55}}'")
-                    sys.exit(1)
+                    # Add quotes around unquoted keys: {key: value} -> {"key": value}
+                    fixed_string = re.sub(r'{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'{"\1":', fixed_string)
+                    fixed_string = re.sub(r',\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r', "\1":', fixed_string)
+                    return json.loads(fixed_string)
+                except json.JSONDecodeError:
+                    # Try alternative parsing using eval (safer with ast.literal_eval)
+                    try:
+                        import ast
+                        # This handles Python dict syntax which is more forgiving
+                        result = ast.literal_eval(param_string)
+                        if isinstance(result, dict):
+                            return result
+                        else:
+                            raise ValueError("Not a dictionary")
+                    except (ValueError, SyntaxError):
+                        print(f"Error parsing parameters: {e}")
+                        print(f"Input received: {repr(param_string)}")
+                        print(f"Examples of valid formats:")
+                        print(f'  JSON with quotes: \'{{"sharpen": 66, "denoise": 55}}\'')
+                        print(f'  Unquoted keys: \'{{sharpen: 66, denoise: 55}}\'')
+                        print(f"  Double-quoted string: '{{\"sharpen\": 66, \"denoise\": 55}}'")
+                        sys.exit(1)
 
 
 def get_input_files(input_paths: List[str]) -> List[Path]:
