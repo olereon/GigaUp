@@ -675,9 +675,6 @@ class Gigapixel:
             """Set model using the new dropdown-based model selection"""
             logger.debug(f"Setting model: {model.display_name}")
             
-            # First, we need to open the model selection dropdown
-            self._open_model_selection_dropdown()
-            
             # Map new models to their display names in the UI
             model_display_mapping = {
                 # Enhance models
@@ -715,32 +712,239 @@ class Gigapixel:
             }
             
             target_model_name = model_display_mapping.get(model.name, "Standard")
-            logger.debug(f"Looking for model: {target_model_name}")
+            logger.debug(f"Target model: {target_model_name}")
             
-            # Try to click the model in the dropdown
-            model_selected = self._click_model_in_dropdown(target_model_name)
+            # Check current model first
+            current_model = self._get_current_model_name()
+            if current_model and current_model.strip() == target_model_name.strip():
+                logger.debug(f"✓ Current model '{current_model}' already matches target '{target_model_name}', skipping model change")
+                return
             
-            if not model_selected:
-                # Fallback to legacy mode selection if dropdown method fails
-                logger.warning(f"Could not select {target_model_name} from dropdown, trying legacy mode selection")
-                legacy_mode = self._get_legacy_mode_for_model(model.name)
-                if legacy_mode:
-                    self._set_mode(legacy_mode)
+            logger.debug(f"Current model: '{current_model}' → Target model: '{target_model_name}'")
+            
+            # Open the model selection dropdown
+            dropdown_opened = self._open_model_selection_dropdown()
+            
+            if dropdown_opened:
+                # Try to click the model in the dropdown
+                model_selected = self._click_model_in_dropdown(target_model_name)
+                
+                if not model_selected:
+                    # Fallback to legacy mode selection if dropdown method fails
+                    logger.warning(f"Could not select {target_model_name} from dropdown, trying legacy mode selection")
+                    legacy_mode = self._get_legacy_mode_for_model(model.name)
+                    if legacy_mode:
+                        self._set_mode(legacy_mode)
+            else:
+                logger.error("Could not open model selection dropdown")
+        
+        def _get_current_model_name(self):
+            """Get the name of the currently selected model"""
+            try:
+                # Look for no-title Button followed by Text element pattern
+                all_children = self._main_window.descendants()
+                
+                for i, element in enumerate(all_children):
+                    try:
+                        element_info = element.element_info
+                        
+                        # Look for Button with no title
+                        if (element_info.control_type == "Button" and 
+                            (not element_info.name or element_info.name.strip() == "")):
+                            
+                            # Check if next element is Text with model name
+                            if i + 1 < len(all_children):
+                                next_element = all_children[i + 1]
+                                next_info = next_element.element_info
+                                
+                                if (next_info.control_type == "Text" and 
+                                    next_info.name and next_info.name.strip()):
+                                    
+                                    current_model = next_info.name.strip()
+                                    logger.debug(f"Found current model: '{current_model}'")
+                                    return current_model
+                    except:
+                        continue
+                        
+                logger.debug("Could not determine current model name")
+                return None
+                
+            except Exception as e:
+                logger.debug(f"Error getting current model name: {e}")
+                return None
         
         def _open_model_selection_dropdown(self):
-            """Open the model selection dropdown by clicking the left arrow button"""
+            """Open the model selection dropdown by clicking the no-title button"""
             import time
             
             logger.debug("Opening model selection dropdown...")
             
-            # Enable debug mode for element discovery
-            dropdown_opened = self._debug_element_selection()
+            try:
+                # Look for the no-title Button that opens the dropdown
+                all_children = self._main_window.descendants()
+                dropdown_button = None
+                
+                for i, element in enumerate(all_children):
+                    try:
+                        element_info = element.element_info
+                        
+                        # Look for Button with no title
+                        if (element_info.control_type == "Button" and 
+                            (not element_info.name or element_info.name.strip() == "")):
+                            
+                            # Check if next element is Text with model name (confirms this is the right button)
+                            if i + 1 < len(all_children):
+                                next_element = all_children[i + 1]
+                                next_info = next_element.element_info
+                                
+                                if (next_info.control_type == "Text" and 
+                                    next_info.name and next_info.name.strip()):
+                                    
+                                    dropdown_button = element
+                                    logger.debug(f"Found dropdown button (no title) followed by model text: '{next_info.name.strip()}'")
+                                    break
+                    except:
+                        continue
+                
+                if dropdown_button:
+                    # Click the dropdown button
+                    try:
+                        dropdown_button.click_input()
+                        logger.debug("✓ Clicked dropdown button")
+                        time.sleep(1.0)  # Wait for dropdown to open
+                        
+                        # Now run debug mode to find model selection elements
+                        print("\n" + "="*80)
+                        print("DEBUG MODE: Model dropdown opened! Scanning for model selection elements...")
+                        print("="*80)
+                        
+                        model_selected = self._debug_model_selection()
+                        return model_selected
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to click dropdown button: {e}")
+                        return False
+                else:
+                    logger.error("Could not find the no-title dropdown button")
+                    return False
+                    
+            except Exception as e:
+                logger.error(f"Error opening model selection dropdown: {e}")
+                return False
+        
+        def _debug_model_selection(self):
+            """Debug mode specifically for model selection after dropdown is opened"""
+            print("\nScanning for model selection elements in the opened dropdown...")
             
-            if dropdown_opened:
-                time.sleep(1.0)  # Wait for dropdown to open
-                logger.debug("✓ Model selection dropdown opened")
-            else:
-                logger.warning("Could not open model selection dropdown")
+            # Collect all potentially relevant elements
+            model_elements = []
+            
+            try:
+                # Get all children of the main window (including new dropdown elements)
+                all_children = self._main_window.descendants()
+                
+                # Filter for elements that might be model options
+                for i, element in enumerate(all_children):
+                    try:
+                        element_info = element.element_info
+                        control_type = element_info.control_type
+                        title = element_info.name or "<No Title>"
+                        
+                        # Look for elements that might be model selection options
+                        # Focus on Text, Button, ListItem that might contain model names
+                        if control_type in ["Text", "Button", "ListItem", "Group", "Pane"]:
+                            class_name = getattr(element_info, 'class_name', '<No Class>')
+                            visible = getattr(element_info, 'visible', 'Unknown')
+                            enabled = getattr(element_info, 'enabled', 'Unknown')
+                            
+                            # Include elements that might be model names
+                            model_keywords = ["standard", "high fidelity", "low res", "text", "art", "cg", "recovery", "enhance", "sharpen", "denoise"]
+                            
+                            # Include if it has a model-related title or if it's a potentially clickable element
+                            if (any(keyword in title.lower() for keyword in model_keywords) or 
+                                control_type in ["Button", "ListItem"] or
+                                (control_type == "Text" and len(title.strip()) > 0 and title != "<No Title>")):
+                                
+                                model_elements.append({
+                                    'element': element,
+                                    'title': title,
+                                    'type': control_type,
+                                    'class': class_name,
+                                    'visible': visible,
+                                    'enabled': enabled
+                                })
+                    except Exception as e:
+                        continue
+                
+                # Display the list of elements
+                print(f"\nFound {len(model_elements)} potential model selection elements:")
+                print("-" * 80)
+                
+                for i, elem_data in enumerate(model_elements):
+                    status = ""
+                    if elem_data['visible'] and elem_data['enabled']:
+                        status = "[ACTIVE]"
+                    elif elem_data['visible']:
+                        status = "[VISIBLE]"
+                    else:
+                        status = "[HIDDEN]"
+                    
+                    print(f"{i+1:3d}. {status:9} {elem_data['type']:12} | '{elem_data['title'][:40]:<40}' | {elem_data['class']}")
+                
+                print("-" * 80)
+                print("Enter the NUMBER of the model element to click (or 0 to skip):")
+                
+                # Get user input for model selection
+                while True:
+                    try:
+                        user_input = input("Model element number: ").strip()
+                        if not user_input:
+                            continue
+                            
+                        element_num = int(user_input)
+                        
+                        if element_num == 0:
+                            print("Skipping model selection...")
+                            return False
+                        
+                        if 1 <= element_num <= len(model_elements):
+                            selected_element = model_elements[element_num - 1]
+                            print(f"\nSelected: {selected_element['title']} ({selected_element['type']})")
+                            
+                            # Try to click the selected element
+                            try:
+                                selected_element['element'].click_input()
+                                print(f"✓ Clicked model element successfully!")
+                                
+                                # Ask user if this selected the right model
+                                print("\nDid this select the correct model? (y/n):")
+                                response = input().strip().lower()
+                                
+                                if response in ['y', 'yes']:
+                                    print("✓ Success! Model selected correctly.")
+                                    return True
+                                else:
+                                    print("This wasn't the right model. Try another element.")
+                                    continue
+                                    
+                            except Exception as e:
+                                print(f"✗ Failed to click model element: {e}")
+                                print("Try another element.")
+                                continue
+                        else:
+                            print(f"Invalid number. Please enter 1-{len(model_elements)} or 0 to skip.")
+                            continue
+                            
+                    except ValueError:
+                        print("Please enter a valid number.")
+                        continue
+                    except KeyboardInterrupt:
+                        print("\nModel selection cancelled.")
+                        return False
+                        
+            except Exception as e:
+                print(f"Error during model element scanning: {e}")
+                return False
         
         def _debug_element_selection(self):
             """Debug mode: scan and list all interactable elements for manual selection"""
