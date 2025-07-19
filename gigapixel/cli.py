@@ -105,7 +105,6 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "-q", "--quality",
         type=int,
-        choices=range(1, 101),
         default=95,
         help="Output image quality (1-100, default: 95)"
     )
@@ -298,6 +297,14 @@ def validate_dimensions(args) -> str:
             print(f"Error: Height must be between 1 and 16384, got {args.height}")
             sys.exit(1)
         return f"h{args.height}"
+        
+
+def validate_quality(quality: int) -> int:
+    """Validate quality parameter"""
+    if quality < 1 or quality > 100:
+        print(f"Error: Quality must be between 1 and 100, got {quality}")
+        sys.exit(1)
+    return quality
 
 
 def parse_parameters(param_string: str) -> Dict[str, Any]:
@@ -452,6 +459,10 @@ def main():
     if not os.path.exists(args.executable):
         print(f"Error: Gigapixel executable not found: {args.executable}")
         sys.exit(1)
+    
+    # Validate quality parameter
+    if hasattr(args, 'quality') and args.quality is not None:
+        args.quality = validate_quality(args.quality)
     
     # Get input files
     input_files = get_input_files(args.input)
