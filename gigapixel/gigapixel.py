@@ -812,14 +812,7 @@ class Gigapixel:
                         dropdown_button.click_input()
                         logger.debug("✓ Clicked dropdown button")
                         time.sleep(1.0)  # Wait for dropdown to open
-                        
-                        # Now run debug mode to find model selection elements
-                        print("\n" + "="*80)
-                        print("DEBUG MODE: Model dropdown opened! Scanning for model selection elements...")
-                        print("="*80)
-                        
-                        model_selected = self._debug_model_selection()
-                        return model_selected
+                        return True
                         
                     except Exception as e:
                         logger.error(f"Failed to click dropdown button: {e}")
@@ -1074,33 +1067,64 @@ class Gigapixel:
                 # Wait a moment for dropdown to be fully loaded
                 time.sleep(0.5)
                 
-                # Try multiple approaches to find the model
-                model_patterns = [
-                    ("Direct title", lambda: self._main_window.child_window(title=model_name)),
-                    ("Button type", lambda: self._main_window.child_window(title=model_name, control_type="Button")),
-                    ("List item", lambda: self._main_window.child_window(title=model_name, control_type="ListItem")),
-                    ("Text element", lambda: self._main_window.child_window(title=model_name, control_type="Text")),
-                    ("Any element", lambda: self._main_window.child_window(title_re=f".*{model_name}.*")),
-                ]
+                # Look for "Select a model" text first to confirm dropdown is open
+                all_children = self._main_window.descendants()
+                found_select_model = False
+                model_element = None
                 
-                for pattern_name, model_func in model_patterns:
+                for i, element in enumerate(all_children):
                     try:
-                        model_element = model_func()
-                        model_element.click_input()
-                        logger.debug(f"✓ Selected model '{model_name}' using: {pattern_name}")
+                        element_info = element.element_info
                         
-                        # Wait for selection to take effect
-                        time.sleep(1.0)
-                        return True
+                        # Look for "Select a model" text
+                        if (element_info.control_type == "Text" and 
+                            element_info.name and 
+                            "Select a model" in element_info.name):
+                            found_select_model = True
+                            logger.debug("Found 'Select a model' text - dropdown is open")
+                            continue
+                        
+                        # After finding "Select a model", look for the target model
+                        if found_select_model:
+                            if (element_info.control_type == "Text" and 
+                                element_info.name and 
+                                element_info.name.strip() == model_name.strip()):
+                                model_element = element
+                                logger.debug(f"Found model '{model_name}' as Text element")
+                                break
+                                
                     except:
                         continue
                 
-                logger.warning(f"Could not find model '{model_name}' in dropdown")
-                return False
+                if model_element:
+                    # Click the model text element
+                    try:
+                        model_element.click_input()
+                        logger.debug(f"✓ Clicked model '{model_name}' successfully")
+                        
+                        # Wait for selection to take effect and dropdown to close
+                        time.sleep(1.0)
+                        return True
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to click model element: {e}")
+                        # Fallback: try debug mode if automatic selection fails
+                        logger.debug("Falling back to debug mode for manual model selection...")
+                        return self._debug_model_selection()
+                else:
+                    if not found_select_model:
+                        logger.error("Could not find 'Select a model' text - dropdown may not be open")
+                    else:
+                        logger.error(f"Could not find model '{model_name}' in the dropdown list")
+                    
+                    # Fallback to debug mode for manual selection
+                    logger.debug("Falling back to debug mode for manual model selection...")
+                    return self._debug_model_selection()
                 
             except Exception as e:
                 logger.error(f"Error selecting model from dropdown: {e}")
-                return False
+                # Fallback to debug mode
+                return self._debug_model_selection()
         
         def _get_legacy_mode_for_model(self, model_name: str):
             """Get legacy mode mapping for fallback"""
