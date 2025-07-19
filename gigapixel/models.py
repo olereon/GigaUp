@@ -62,9 +62,9 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="General-purpose model balancing detail, sharpness, and noise reduction for various images.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, description="Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, description="Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, description="Reduces compression artifacts to improve details")
         }
     )
     
@@ -75,9 +75,9 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Enhances clarity and detail in low-resolution images like web graphics and screenshots.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, description="Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, description="Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, description="Reduces compression artifacts to improve details")
         }
     )
     
@@ -88,8 +88,8 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Optimized for CGI and digital illustrations, enhancing texture and detail in computer-generated images.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image")
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, description="Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, description="Reduces noise in the image")
         }
     )
     
@@ -100,9 +100,9 @@ class EnhanceStandardModel(Enum):
         model_class=ModelClass.STANDARD,
         description="Ideal for high-quality images, preserving intricate details in professional photography.",
         parameters={
-            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, "Slightly sharpens the image"),
-            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, "Reduces noise in the image"),
-            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, "Reduces compression artifacts to improve details"),
+            "sharpen": ModelParameter("sharpen", "integer", 1, 100, 1, description="Slightly sharpens the image"),
+            "denoise": ModelParameter("denoise", "integer", 1, 100, 1, description="Reduces noise in the image"),
+            "fix_compression": ModelParameter("fix_compression", "integer", 1, 100, 1, description="Reduces compression artifacts to improve details"),
             "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
@@ -132,8 +132,8 @@ class EnhanceGenerativeModel(Enum):
         description="Delivers high fidelity upscaling for extremely low-resolution images, preserving natural detail and sharpness.",
         parameters={
             "version": ModelParameter("version", "text", default_value="v2", description="Version v1 or v2 (New)"),
-            "detail": ModelParameter("detail", "integer", 0, 100, 50, "Adjusts the level of added detail after rendering"),
-            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
+            "detail": ModelParameter("detail", "integer", 0, 100, 50, description="Adjusts the level of added detail after rendering"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
     
@@ -145,7 +145,7 @@ class EnhanceGenerativeModel(Enum):
         description="Realistic upscaling with subtle enhancement options.",
         parameters={
             "enhancement": ModelParameter("enhancement", "text", default_value="None", description="Enhancement level: None or Subtle"),
-            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
     
@@ -158,8 +158,8 @@ class EnhanceGenerativeModel(Enum):
         parameters={
             "creativity": ModelParameter("creativity", "text", default_value="Medium", description="Creativity level: Low, Medium, High, or Max"),
             "image_description": ModelParameter("image_description", "text", max_length=1024, default_value="", description="Guiding prompt for image description"),
-            "texture": ModelParameter("texture", "integer", 1, 5, 1, "Texture level from 1 to 5"),
-            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, "Enable face recovery processing")
+            "texture": ModelParameter("texture", "integer", 1, 5, 1, description="Texture level from 1 to 5"),
+            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
 
