@@ -733,78 +733,132 @@ class Gigapixel:
             
             logger.debug("Opening model selection dropdown...")
             
+            # Enable debug mode for element discovery
+            dropdown_opened = self._debug_element_selection()
+            
+            if dropdown_opened:
+                time.sleep(1.0)  # Wait for dropdown to open
+                logger.debug("✓ Model selection dropdown opened")
+            else:
+                logger.warning("Could not open model selection dropdown")
+        
+        def _debug_element_selection(self):
+            """Debug mode: scan and list all interactable elements for manual selection"""
+            print("\n" + "="*80)
+            print("DEBUG MODE: Scanning for interactable elements...")
+            print("="*80)
+            
+            # Collect all potentially interactable elements
+            interactable_elements = []
+            
             try:
-                # Look for the left arrow button near the model selection area
-                # Try multiple approaches to find the dropdown trigger
+                # Get all children of the main window
+                all_children = self._main_window.descendants()
                 
-                # Method 1: Look for left arrow or expand button
-                dropdown_opened = False
-                arrow_patterns = [
-                    ("Left arrow", lambda: self._main_window.child_window(title="<", control_type="Button")),
-                    ("Arrow button", lambda: self._main_window.child_window(title="◀", control_type="Button")),
-                    ("Expand arrow", lambda: self._main_window.child_window(control_type="Button", title_re=".*arrow.*")),
-                    ("Model dropdown", lambda: self._main_window.child_window(title_re=".*model.*", control_type="Button")),
+                # Filter for interactable element types
+                interactable_types = [
+                    "Button", "CheckBox", "ComboBox", "Edit", "Hyperlink", 
+                    "ListItem", "MenuItem", "RadioButton", "Slider", "SpinButton",
+                    "TabItem", "Text", "Group", "Pane"
                 ]
                 
-                for pattern_name, button_func in arrow_patterns:
+                for i, element in enumerate(all_children):
                     try:
-                        arrow_button = button_func()
-                        arrow_button.click_input()
-                        logger.debug(f"✓ Clicked dropdown arrow using: {pattern_name}")
-                        dropdown_opened = True
-                        break
-                    except:
+                        element_info = element.element_info
+                        control_type = element_info.control_type
+                        
+                        # Only include potentially interactable elements
+                        if control_type in interactable_types:
+                            title = element_info.name or "<No Title>"
+                            class_name = getattr(element_info, 'class_name', '<No Class>')
+                            visible = getattr(element_info, 'visible', 'Unknown')
+                            enabled = getattr(element_info, 'enabled', 'Unknown')
+                            
+                            # Skip elements that are clearly not useful
+                            if title in ["", " ", "Application", "Window"] and control_type in ["Group", "Pane"]:
+                                continue
+                                
+                            interactable_elements.append({
+                                'element': element,
+                                'title': title,
+                                'type': control_type,
+                                'class': class_name,
+                                'visible': visible,
+                                'enabled': enabled
+                            })
+                    except Exception as e:
+                        # Skip elements that can't be analyzed
                         continue
                 
-                # Method 2: Look for the model selection area and click on it
-                if not dropdown_opened:
-                    try:
-                        # The model selection area might be a clickable region
-                        model_area_patterns = [
-                            ("Model selection area", lambda: self._main_window.child_window(title_re=".*High fidelity.*")),
-                            ("Current model", lambda: self._main_window.child_window(title_re=".*Standard.*")),
-                            ("Model panel", lambda: self._main_window.child_window(control_type="Group", title_re=".*model.*")),
-                        ]
-                        
-                        for pattern_name, area_func in model_area_patterns:
-                            try:
-                                model_area = area_func()
-                                model_area.click_input()
-                                logger.debug(f"✓ Clicked model area using: {pattern_name}")
-                                dropdown_opened = True
-                                break
-                            except:
-                                continue
-                    except:
-                        pass
+                # Display the list of elements
+                print(f"\nFound {len(interactable_elements)} potentially interactable elements:")
+                print("-" * 80)
                 
-                # Method 3: Try to find any clickable element that might open the dropdown
-                if not dropdown_opened:
-                    try:
-                        # Look for elements near Dimensions/Pixel density as mentioned
-                        dimensions_area = self._main_window.child_window(title="Dimensions")
-                        # Look for clickable elements near it
-                        nearby_buttons = self._main_window.children(control_type="Button")
-                        for button in nearby_buttons:
-                            try:
-                                # Try clicking buttons near the dimensions area
-                                button.click_input()
-                                logger.debug("✓ Clicked potential dropdown button near Dimensions")
-                                dropdown_opened = True
-                                break
-                            except:
-                                continue
-                    except:
-                        pass
-                
-                if dropdown_opened:
-                    time.sleep(1.0)  # Wait for dropdown to open
-                    logger.debug("✓ Model selection dropdown opened")
-                else:
-                    logger.warning("Could not open model selection dropdown")
+                for i, elem_data in enumerate(interactable_elements):
+                    status = ""
+                    if elem_data['visible'] and elem_data['enabled']:
+                        status = "[ACTIVE]"
+                    elif elem_data['visible']:
+                        status = "[VISIBLE]"
+                    else:
+                        status = "[HIDDEN]"
                     
+                    print(f"{i+1:3d}. {status:9} {elem_data['type']:12} | '{elem_data['title'][:40]:<40}' | {elem_data['class']}")
+                
+                print("-" * 80)
+                print("Enter the NUMBER of the element to click (or 0 to skip debug mode):")
+                
+                # Get user input
+                while True:
+                    try:
+                        user_input = input("Element number: ").strip()
+                        if not user_input:
+                            continue
+                            
+                        element_num = int(user_input)
+                        
+                        if element_num == 0:
+                            print("Skipping debug mode...")
+                            return False
+                        
+                        if 1 <= element_num <= len(interactable_elements):
+                            selected_element = interactable_elements[element_num - 1]
+                            print(f"\nSelected: {selected_element['title']} ({selected_element['type']})")
+                            
+                            # Try to click the selected element
+                            try:
+                                selected_element['element'].click_input()
+                                print(f"✓ Clicked element successfully!")
+                                
+                                # Ask user if this was the right button
+                                print("\nDid this open the model selection dropdown? (y/n):")
+                                response = input().strip().lower()
+                                
+                                if response in ['y', 'yes']:
+                                    print("✓ Success! This element opens the model dropdown.")
+                                    return True
+                                else:
+                                    print("This wasn't the right element. Try another one.")
+                                    continue
+                                    
+                            except Exception as e:
+                                print(f"✗ Failed to click element: {e}")
+                                print("Try another element.")
+                                continue
+                        else:
+                            print(f"Invalid number. Please enter 1-{len(interactable_elements)} or 0 to skip.")
+                            continue
+                            
+                    except ValueError:
+                        print("Please enter a valid number.")
+                        continue
+                    except KeyboardInterrupt:
+                        print("\nDebug mode cancelled.")
+                        return False
+                        
             except Exception as e:
-                logger.error(f"Error opening model selection dropdown: {e}")
+                print(f"Error during element scanning: {e}")
+                return False
         
         def _click_model_in_dropdown(self, model_name: str) -> bool:
             """Click on a specific model in the opened dropdown"""
