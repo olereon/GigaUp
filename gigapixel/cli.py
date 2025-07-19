@@ -63,9 +63,8 @@ def create_parser() -> argparse.ArgumentParser:
     # Scale options
     parser.add_argument(
         "-s", "--scale",
-        choices=["1x", "2x", "4x", "6x"],
         default="2x",
-        help="Scale factor for upscaling (default: 2x)"
+        help="Scale factor for upscaling (e.g., 1x, 2x, 4x, 6x, 1.5, 3.5) (default: 2x)"
     )
     
     # Parameters
@@ -220,6 +219,30 @@ def list_presets():
             print(f"  {preset:<20} - (error loading)")
 
 
+def validate_scale(scale_str: str) -> str:
+    """Validate scale value and return it if valid"""
+    # Check if it's a standard scale
+    if scale_str in ["1x", "2x", "4x", "6x"]:
+        return scale_str
+    
+    # Try to parse as custom scale
+    try:
+        # Remove 'x' suffix if present
+        if scale_str.endswith('x'):
+            scale_str = scale_str[:-1]
+        
+        scale_value = float(scale_str)
+        if scale_value <= 0:
+            print(f"Error: Scale must be positive, got {scale_value}")
+            sys.exit(1)
+        
+        # Return as string without 'x' suffix for custom scales
+        return str(scale_value)
+    except ValueError:
+        print(f"Error: Invalid scale value '{scale_str}'. Use standard scales (1x, 2x, 4x, 6x) or custom values (e.g., 1.5, 3.5)")
+        sys.exit(1)
+
+
 def parse_parameters(param_string: str) -> Dict[str, Any]:
     """Parse parameters from JSON string or file"""
     if not param_string:
@@ -300,7 +323,8 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
     elif args.legacy_mode:
         # Use legacy mode
         try:
-            parameters = factory.create_from_legacy(args.legacy_mode, args.scale)
+            validated_scale = validate_scale(args.scale)
+            parameters = factory.create_from_legacy(args.legacy_mode, validated_scale)
         except Exception as e:
             print(f"Error creating parameters from legacy mode: {e}")
             sys.exit(1)
@@ -308,7 +332,8 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
         # Use specified model
         try:
             parsed_params = parse_parameters(args.parameters) if args.parameters else {}
-            parameters = factory.create_processing_parameters(args.model, parsed_params, args.scale)
+            validated_scale = validate_scale(args.scale)
+            parameters = factory.create_processing_parameters(args.model, parsed_params, validated_scale)
         except Exception as e:
             print(f"Error creating processing parameters: {e}")
             sys.exit(1)
