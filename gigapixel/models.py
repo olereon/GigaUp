@@ -145,6 +145,7 @@ class EnhanceGenerativeModel(Enum):
         description="Realistic upscaling with subtle enhancement options.",
         parameters={
             "enhancement": ModelParameter("enhancement", "text", default_value="None", description="Enhancement level: None or Subtle"),
+            "prompt": ModelParameter("prompt", "text", max_length=500, default_value="", description="Guiding image prompt (only used when enhancement is Subtle)"),
             "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
         }
     )
@@ -157,9 +158,9 @@ class EnhanceGenerativeModel(Enum):
         description="Creative upscaling with customizable creativity levels and texture control.",
         parameters={
             "creativity": ModelParameter("creativity", "text", default_value="Medium", description="Creativity level: Low, Medium, High, or Max"),
-            "image_description": ModelParameter("image_description", "text", max_length=1024, default_value="", description="Guiding prompt for image description"),
-            "texture": ModelParameter("texture", "integer", 1, 5, 1, description="Texture level from 1 to 5"),
-            "face_recovery": ModelParameter("face_recovery", "boolean", default_value=False, description="Enable face recovery processing")
+            "prompt": ModelParameter("prompt", "text", max_length=500, default_value="", description="Creative guidance prompt"),
+            "texture": ModelParameter("texture", "integer", 1, 5, 3, description="Texture level (1-5)")
+            # Note: face_recovery is not available for Redefine creative model
         }
     )
 

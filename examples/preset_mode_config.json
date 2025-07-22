@@ -1,0 +1,6 @@
+{
+  "executable": "C:\\Program Files\\Topaz Labs LLC\\Topaz Gigapixel AI\\Topaz Gigapixel AI.exe",
+  "input": ["path/to/image1.jpg", "path/to/image2.png", "path/to/image3.jpg"],
+  "preset_mode": true,
+  "prompt": "Enhance the details and colors naturally"
+}

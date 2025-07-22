@@ -25,17 +25,22 @@ def create_parser() -> argparse.ArgumentParser:
         epilog="For more information, visit: https://github.com/olereon/GigaUp"
     )
     
-    # Required arguments
+    # Required arguments (or use --json)
     parser.add_argument(
         "input",
-        nargs="+",
+        nargs="*",  # Changed from "+" to "*" to allow optional when using --json
         help="Input image file(s) or directory to process"
     )
     
     parser.add_argument(
         "-e", "--executable",
-        required=True,
         help="Path to Topaz Gigapixel AI executable"
+    )
+    
+    # JSON config option
+    parser.add_argument(
+        "--json",
+        help="Path to JSON configuration file containing all parameters"
     )
     
     # Output options
@@ -166,6 +171,12 @@ def create_parser() -> argparse.ArgumentParser:
         "--debug-ui",
         action="store_true",
         help="Enable UI debugging mode to manually identify parameter controls"
+    )
+    
+    parser.add_argument(
+        "--preset-mode",
+        action="store_true",
+        help="Preset mode: use Gigapixel's saved settings, only open files and set prompt if provided"
     )
     
     return parser
@@ -313,6 +324,79 @@ def validate_quality(quality: int) -> int:
     return quality
 
 
+def load_json_config(json_path: str) -> Dict[str, Any]:
+    """Load configuration from JSON file with enhanced parsing for Windows paths"""
+    try:
+        with open(json_path, 'r') as f:
+            content = f.read()
+        
+        # Try to parse as-is first
+        try:
+            config = json.loads(content)
+            return config
+        except json.JSONDecodeError:
+            # If parsing fails, try to fix common issues
+            import re
+            
+            # Fix 1: Add missing commas in arrays
+            # Pattern: "text" "text" -> "text", "text"
+            fixed_content = re.sub(r'"\s+"', '", "', content)
+            
+            # Fix 2: Convert single backslashes to double backslashes for JSON validity
+            # Simple approach: replace all single backslashes with double backslashes in strings
+            # First, find all strings and fix backslashes within them
+            import re
+            
+            def fix_backslashes_in_strings(match):
+                # Get the string content (without quotes)
+                string_content = match.group(1)
+                # Replace single backslashes with double backslashes, but avoid double-escaping
+                # If we see \\, keep it as \\\\, if we see \, make it \\\\
+                result = ""
+                i = 0
+                while i < len(string_content):
+                    if string_content[i] == '\\':
+                        if i + 1 < len(string_content) and string_content[i + 1] == '\\':
+                            # Already escaped, keep as double backslash
+                            result += '\\\\\\\\'
+                            i += 2
+                        else:
+                            # Single backslash, make it double
+                            result += '\\\\\\\\'
+                            i += 1
+                    else:
+                        result += string_content[i]
+                        i += 1
+                # Return with quotes
+                return '"' + result + '"'
+            
+            # Apply to all strings in JSON  
+            fixed_content = re.sub(r'"([^"]*)"', fix_backslashes_in_strings, fixed_content)
+            
+            try:
+                config = json.loads(fixed_content)
+                print("⚠️  JSON file had formatting issues but was automatically fixed during parsing")
+                return config
+            except json.JSONDecodeError as e:
+                print(f"Error: Invalid JSON in config file even after attempted fixes: {e}")
+                print(f"Original content around error:")
+                lines = content.split('\n')
+                if hasattr(e, 'lineno') and e.lineno:
+                    start = max(0, e.lineno - 2)
+                    end = min(len(lines), e.lineno + 1)
+                    for i, line in enumerate(lines[start:end], start + 1):
+                        marker = " >>> " if i == e.lineno else "     "
+                        print(f"{marker}{i:3d}: {line}")
+                sys.exit(1)
+                
+    except FileNotFoundError:
+        print(f"Error: JSON config file not found: {json_path}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading JSON config: {e}")
+        sys.exit(1)
+
+
 def parse_parameters(param_string: str) -> Dict[str, Any]:
     """Parse parameters from JSON string or file"""
     if not param_string:
@@ -343,11 +427,20 @@ def parse_parameters(param_string: str) -> Dict[str, Any]:
                 # Handle numeric values (no quotes needed)
                 return json.loads(fixed_string)
             except json.JSONDecodeError:
-                # Try to fix unquoted keys (common when shell strips quotes)
+                # Try to fix unquoted keys and string values (common when shell strips quotes)
                 try:
                     # Add quotes around unquoted keys: {key: value} -> {"key": value}
                     fixed_string = re.sub(r'{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'{"\1":', fixed_string)
                     fixed_string = re.sub(r',\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r', "\1":', fixed_string)
+                    
+                    # Add quotes around unquoted string values
+                    # First handle simple word values: "key": value -> "key": "value"
+                    fixed_string = re.sub(r':\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*([,}])', r': "\1"\2', fixed_string)
+                    
+                    # Then handle multi-word string values up to comma or closing brace
+                    # This captures strings with spaces like: prompt:hello world -> prompt:"hello world"
+                    fixed_string = re.sub(r':\s*([^,}]+?)(?=[,}])', lambda m: f': "{m.group(1).strip()}"' if not m.group(1).strip().startswith('"') and not m.group(1).strip().replace('.','').replace('-','').isdigit() else m.group(0), fixed_string)
+                    
                     return json.loads(fixed_string)
                 except json.JSONDecodeError:
                     # Try alternative parsing using eval (safer with ast.literal_eval)
@@ -397,7 +490,7 @@ def create_processing_jobs(args, input_files: List[Path]) -> List[ProcessingJob]
     jobs = []
     
     # Determine output directory
-    if args.output:
+    if args.output and args.output.strip():
         output_dir = Path(args.output)
     else:
         # Use same directory as first input file with '_enhanced' suffix
@@ -482,6 +575,48 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
     
+    # Load JSON config if provided
+    if args.json:
+        config = load_json_config(args.json)
+        
+        # Override args with JSON config values
+        if 'executable' in config:
+            args.executable = config['executable']
+        if 'input' in config:
+            if isinstance(config['input'], list):
+                args.input = config['input']
+            else:
+                args.input = [config['input']]
+        if 'output' in config:
+            args.output = config['output']
+        if 'model' in config:
+            args.model = config['model']
+        if 'scale' in config:
+            args.scale = config['scale']
+        if 'width' in config:
+            args.width = config['width']
+        if 'height' in config:
+            args.height = config['height']
+        if 'parameters' in config:
+            args.parameters = json.dumps(config['parameters']) if isinstance(config['parameters'], dict) else config['parameters']
+        if 'quality' in config:
+            args.quality = config['quality']
+        if 'prefix' in config:
+            args.prefix = config['prefix']
+        if 'suffix' in config:
+            args.suffix = config['suffix']
+        if 'preset' in config:
+            args.preset = config['preset']
+        if 'continue_on_error' in config:
+            args.continue_on_error = config['continue_on_error']
+        if 'timeout' in config:
+            args.timeout = config['timeout']
+        if 'preset_mode' in config:
+            args.preset_mode = config['preset_mode']
+        if 'prompt' in config and args.preset_mode:
+            # Special handling for preset mode prompt
+            args.preset_prompt = config['prompt']
+    
     # Handle informational commands
     if args.list_models:
         list_models()
@@ -496,8 +631,16 @@ def main():
         return
     
     # Validate required arguments
+    if not args.executable:
+        print("Error: Gigapixel executable path is required. Use -e or --json with 'executable' field")
+        sys.exit(1)
+        
     if not os.path.exists(args.executable):
         print(f"Error: Gigapixel executable not found: {args.executable}")
+        sys.exit(1)
+    
+    if not args.input:
+        print("Error: Input files are required. Provide input files or use --json with 'input' field")
         sys.exit(1)
     
     # Validate quality parameter
@@ -513,8 +656,79 @@ def main():
     if not args.quiet:
         print(f"Found {len(input_files)} input files")
     
-    # Create processing jobs
+    # Initialize Gigapixel early for preset mode
+    try:
+        if args.verbose:
+            print(f"Initializing Gigapixel with executable: {args.executable}")
+        
+        gigapixel = Gigapixel(args.executable, args.timeout)
+        
+        # Enable debug UI mode if requested
+        if args.debug_ui:
+            gigapixel._debug_ui_mode = True
+            gigapixel._app._debug_ui_mode = True  # Set on the _App instance too
+            print("🔧 Interactive UI debugging mode enabled")
+        
+        # Set quality and prefix first
+        gigapixel.set_export_parameters(quality=args.quality, prefix=args.prefix)
+        
+        # Set suffix parameter - we'll set the actual suffix value later after creating jobs
+        suffix_config = parse_suffix_mode(args.suffix)
+        if suffix_config["mode"] == "auto":
+            # For auto mode, we'll set the actual generated suffix later
+            pass  # Will be set after job creation
+        elif suffix_config["toggle_on"]:
+            # Enable suffix with empty value (mode "1")
+            gigapixel.set_export_parameters(suffix="1")
+        elif suffix_config["mode"] == "custom":
+            # Set custom suffix
+            gigapixel.set_export_parameters(suffix=suffix_config["value"])
+        else:
+            # Disable suffix (mode "0")
+            gigapixel.set_export_parameters(suffix="0")
+        
+    except Exception as e:
+        print(f"Error initializing Gigapixel: {e}")
+        sys.exit(1)
+    
+    # Handle preset mode differently
+    if args.preset_mode:
+        # In preset mode, we skip all parameter setup and just process with current settings
+        if not args.quiet:
+            print("Running in preset mode - using Gigapixel's saved settings")
+        
+        # Get prompt if provided in JSON config
+        prompt = getattr(args, 'preset_prompt', None)
+        
+        try:
+            gigapixel.process_preset_mode(input_files, prompt)
+            if not args.quiet:
+                print(f"\nPreset mode completed: {len(input_files)} files processed")
+            return
+        except Exception as e:
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            else:
+                print(f"Error in preset mode: {e}")
+            sys.exit(1)
+    
+    # Normal mode - create processing jobs
     jobs = create_processing_jobs(args, input_files)
+    
+    # Set auto-generated suffix if using auto mode
+    suffix_config = parse_suffix_mode(args.suffix)
+    if suffix_config["mode"] == "auto" and jobs:
+        # Generate the auto suffix for the first job (all jobs use same parameters)
+        validated_size = validate_dimensions(args)
+        auto_suffix = generate_auto_suffix(jobs[0].parameters, validated_size, args.quality)
+        # Remove the leading dash if present
+        if auto_suffix.startswith("-"):
+            auto_suffix = auto_suffix[1:]
+        # Set the auto-generated suffix in export parameters
+        gigapixel.set_export_parameters(suffix=auto_suffix)
+        if not args.quiet:
+            print(f"Auto-generated suffix: '{auto_suffix}'")
     
     # Save preset if requested
     if args.save_preset:
@@ -545,18 +759,8 @@ def main():
             print()
         return
     
-    # Initialize Gigapixel
+    # Process jobs
     try:
-        if args.verbose:
-            print(f"Initializing Gigapixel with executable: {args.executable}")
-        
-        gigapixel = Gigapixel(args.executable, args.timeout)
-        
-        # Enable debug UI mode if requested
-        if args.debug_ui:
-            gigapixel._app._debug_ui_mode = True
-        
-        # Process jobs
         if not args.quiet:
             print(f"\nProcessing {len(jobs)} files...")
         
@@ -589,7 +793,7 @@ def main():
                 failed = len([j for j in jobs if j.status == "error"])
                 if not self.quiet:
                     print(f"\nBatch completed: {completed} successful, {failed} failed")
-        
+    
         # Add callback
         callback = CLICallback(args.quiet, args.verbose)
         gigapixel.add_callback(callback)
@@ -610,7 +814,7 @@ def main():
         # Exit with error code if any jobs failed
         if failed > 0:
             sys.exit(1)
-            
+        
     except KeyboardInterrupt:
         print("\nProcessing interrupted by user")
         sys.exit(1)

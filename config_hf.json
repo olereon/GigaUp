@@ -1,0 +1,17 @@
+{
+  "executable": "C:\\Program Files\\Topaz Labs LLC\\Topaz Gigapixel AI\\Topaz Gigapixel AI.exe",
+  "input": ["C:\\Users\\oylel\\Downloads\\dreamina-test1.jpeg","C:\\Users\\oylel\\Downloads\\dreamina-test2.jpeg","C:\\Users\\oylel\\Downloads\\dreamina-test3.jpeg"],
+  "output": "",
+  "model": "high_fidelity_v2",
+  "scale": "3x",
+  "parameters": {
+    "sharpen": 66,
+    "denoise": 55,
+    "fix_compression": 22
+  },
+  "quality": 95,
+  "prefix": "",
+  "suffix": "auto",
+  "continue_on_error": true,
+  "timeout": 900
+}

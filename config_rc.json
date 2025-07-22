@@ -1,0 +1,17 @@
+{
+  "executable": "C:\\Program Files\\Topaz Labs LLC\\Topaz Gigapixel AI\\Topaz Gigapixel AI.exe",
+  "input": ["C:\\Users\\oylel\\Downloads\\dreamina-test1.jpeg","C:\\Users\\oylel\\Downloads\\dreamina-test2.jpeg"],
+  "output": "",
+  "model": "redefine_creative",
+  "scale": "3x",
+  "parameters": {
+    "creativity": "High",
+    "prompt": "A professional black & white photograph of an old woman",
+    "texture": 1
+  },
+  "quality": 95,
+  "prefix": "",
+  "suffix": "auto",
+  "continue_on_error": true,
+  "timeout": 900
+}

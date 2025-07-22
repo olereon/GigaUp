@@ -1,0 +1,17 @@
+{
+  "executable": "C:\\Program Files\\Topaz Labs LLC\\Topaz Gigapixel AI\\Topaz Gigapixel AI.exe",
+  "input": ["path/to/image1.jpg", "path/to/image2.png"],
+  "output": "path/to/output",
+  "model": "redefine_creative",
+  "scale": "4x",
+  "parameters": {
+    "creativity": "High",
+    "prompt": "A beautiful landscape with vivid colors",
+    "texture": 3
+  },
+  "quality": 95,
+  "prefix": "enhanced_",
+  "suffix": "auto",
+  "continue_on_error": true,
+  "timeout": 900
+}
