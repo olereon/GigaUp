@@ -722,9 +722,7 @@ def main():
         # Generate the auto suffix for the first job (all jobs use same parameters)
         validated_size = validate_dimensions(args)
         auto_suffix = generate_auto_suffix(jobs[0].parameters, validated_size, args.quality)
-        # Remove the leading dash if present
-        if auto_suffix.startswith("-"):
-            auto_suffix = auto_suffix[1:]
+        # Keep the leading dash for proper file name delineation
         # Set the auto-generated suffix in export parameters
         gigapixel.set_export_parameters(suffix=auto_suffix)
         if not args.quiet:
