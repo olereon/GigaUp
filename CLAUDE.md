@@ -175,7 +175,7 @@ The codebase has been significantly extended with a modular architecture:
 - **gigapixel/gui/**: Complete desktop GUI implementation
 
 ### GUI Components
-- **gui/main_window.py**: Main tkinter application with collapsible sections, tooltips, and batch processing
+- **gui/main_window.py**: Main tkinter application with collapsible sections, tooltips, export controls, and JSON config support
 - **gui/widgets.py**: Custom widgets (CollapsibleFrame, ToolTip, ParameterWidget, ProgressFrame, LogViewer)
 - **gui/utils.py**: Utility functions for GUI operations, notifications, and background tasks
 
@@ -243,6 +243,8 @@ params = factory.create_processing_parameters(
 - Follow collapsible section pattern for tool organization
 - Use threading for background processing to maintain UI responsiveness
 - Implement proper progress tracking and user feedback
+- Integrate export parameters with the underlying automation system
+- Support JSON configuration import/export for reproducible workflows
 
 ### Code Quality Standards
 - **Production-Ready Code**: Remove all debug methods and interactive debugging
@@ -361,6 +363,13 @@ gp.process_batch(jobs)
 - Maintain backward compatibility
 
 ## Recent Major Updates (Latest)
+
+### GUI Enhancements (v2.0+)
+- **Export Parameter Controls**: Added quality, prefix, and suffix settings with auto-generation support
+- **JSON Configuration System**: Complete import/export functionality for reproducible workflows
+- **Advanced Suffix Modes**: Auto-generation, custom text, or none with intelligent dash handling
+- **Export Dialog Integration**: Seamless configuration passing to Gigapixel's native export system
+- **Enhanced Menu System**: File menu with JSON import/export and improved navigation
 
 ### Performance & Reliability Improvements
 - **Value Verification System**: Added comprehensive current value checking across all UI controls

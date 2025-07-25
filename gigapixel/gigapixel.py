@@ -2346,11 +2346,18 @@ class Gigapixel:
             
             # Set the output path in the save dialog
             try:
-                logger.debug(f"Setting output path to: {output_path}")
+                # Use stored output directory if available, otherwise use provided path
+                if hasattr(self, '_output_directory') and self._output_directory:
+                    final_output_path = self._output_directory
+                    logger.debug(f"Using stored output directory: {final_output_path}")
+                else:
+                    final_output_path = output_path
+                    logger.debug(f"Using provided output path: {final_output_path}")
+                
                 # Clear current path and set new one
                 send_keys('^a')  # Select all
                 # Normalize path for Windows - ensure single backslashes for Gigapixel app
-                normalized_output_path = str(output_path).replace('\\\\', '\\')
+                normalized_output_path = str(final_output_path).replace('\\\\', '\\')
                 clipboard.copy(normalized_output_path)
                 send_keys('^v')  # Paste new path
                 
@@ -2810,6 +2817,14 @@ class Gigapixel:
             self._app._export_prefix = prefix
         if suffix is not None:
             self._app._export_suffix = suffix
+    
+    def set_output_directory(self, directory: str):
+        """Set the output directory for exports
+        
+        Args:
+            directory: Path to the output directory
+        """
+        self._app._output_directory = directory
     
     def remove_callback(self, callback: ProcessingCallback):
         """Remove a processing callback"""

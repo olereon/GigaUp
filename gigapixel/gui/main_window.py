@@ -13,6 +13,7 @@ from ..gigapixel import Gigapixel, ProcessingJob, ProcessingCallback
 from ..models import ModelCategory, AIModel
 from ..parameters import ProcessingParameters
 from ..factory import get_model_factory
+from ..suffix_generator import generate_auto_suffix, parse_suffix_mode
 from .widgets import CollapsibleFrame, ToolTip, ParameterWidget, ProgressFrame
 from .utils import center_window, show_notification, play_completion_sound
 
@@ -164,6 +165,64 @@ class GigaUpWindow:
         # Add tooltips
         ToolTip(input_entry, "Select input image files or folder to process")
         ToolTip(output_entry, "Select output folder for enhanced images")
+        
+        # Export parameters section
+        export_frame = ttk.LabelFrame(path_frame, text="Export Settings", padding=5)
+        export_frame.pack(fill="x", pady=(10, 0))
+        
+        # Quality setting
+        quality_frame = ttk.Frame(export_frame)
+        quality_frame.pack(fill="x", pady=2)
+        
+        ttk.Label(quality_frame, text="Quality:").pack(side="left")
+        self.quality_var = tk.IntVar(value=95)
+        quality_spinbox = ttk.Spinbox(quality_frame, from_=1, to=100, textvariable=self.quality_var, width=10)
+        quality_spinbox.pack(side="left", padx=(5, 0))
+        ToolTip(quality_spinbox, "JPEG quality (1-100, default: 95)")
+        
+        # Prefix setting
+        prefix_frame = ttk.Frame(export_frame)
+        prefix_frame.pack(fill="x", pady=2)
+        
+        ttk.Label(prefix_frame, text="Prefix:").pack(side="left")
+        self.prefix_var = tk.StringVar()
+        prefix_entry = ttk.Entry(prefix_frame, textvariable=self.prefix_var, width=20)
+        prefix_entry.pack(side="left", padx=(5, 0))
+        ToolTip(prefix_entry, "Filename prefix (optional)")
+        
+        # Suffix mode
+        suffix_frame = ttk.Frame(export_frame)
+        suffix_frame.pack(fill="x", pady=2)
+        
+        ttk.Label(suffix_frame, text="Suffix:").pack(side="left")
+        self.suffix_mode_var = tk.StringVar(value="auto")
+        
+        suffix_radio_frame = ttk.Frame(suffix_frame)
+        suffix_radio_frame.pack(side="left", padx=(5, 0))
+        
+        ttk.Radiobutton(suffix_radio_frame, text="Auto", variable=self.suffix_mode_var, 
+                       value="auto").pack(side="left")
+        ttk.Radiobutton(suffix_radio_frame, text="Custom", variable=self.suffix_mode_var, 
+                       value="custom").pack(side="left", padx=(10, 0))
+        ttk.Radiobutton(suffix_radio_frame, text="None", variable=self.suffix_mode_var, 
+                       value="none").pack(side="left", padx=(10, 0))
+        
+        self.custom_suffix_var = tk.StringVar()
+        self.custom_suffix_entry = ttk.Entry(suffix_frame, textvariable=self.custom_suffix_var, width=20)
+        self.custom_suffix_entry.pack(side="left", padx=(10, 0))
+        
+        # Enable/disable custom suffix entry based on mode
+        def on_suffix_mode_changed(*args):
+            if self.suffix_mode_var.get() == "custom":
+                self.custom_suffix_entry.config(state="normal")
+            else:
+                self.custom_suffix_entry.config(state="disabled")
+        
+        self.suffix_mode_var.trace("w", on_suffix_mode_changed)
+        on_suffix_mode_changed()  # Initialize state
+        
+        ToolTip(suffix_radio_frame, "Auto: Generate from parameters\nCustom: Use your text\nNone: No suffix")
+        ToolTip(self.custom_suffix_entry, "Custom suffix text")
     
     def create_tool_sections(self):
         """Create collapsible sections for different tool categories"""
@@ -427,6 +486,9 @@ class GigaUpWindow:
         # File menu
         file_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="Import JSON Config...", command=self.import_json_config)
+        file_menu.add_command(label="Export JSON Config...", command=self.export_json_config)
+        file_menu.add_separator()
         file_menu.add_command(label="Set Gigapixel Path...", command=self.set_executable_path)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.on_closing)
@@ -551,6 +613,10 @@ class GigaUpWindow:
     def process_jobs_thread(self, jobs: List[ProcessingJob]):
         """Process jobs in background thread"""
         try:
+            # Set export parameters before processing
+            self._set_export_parameters()
+            
+            # Process the batch
             self.gigapixel.process_batch(jobs, continue_on_error=True)
         except Exception as e:
             self.log_message(f"Batch processing error: {e}", "ERROR")
@@ -595,7 +661,8 @@ class GigaUpWindow:
         """Create processing jobs from current settings"""
         jobs = []
         input_path = self.input_path_var.get().strip()
-        output_folder = Path(self.output_path_var.get().strip())
+        # Note: output_folder is used for validation only, actual output is set via export dialog
+        output_folder = Path(self.output_path_var.get().strip()) if self.output_path_var.get().strip() else None
         
         # Get current parameter values
         current_params = {}
@@ -629,15 +696,38 @@ class GigaUpWindow:
         else:
             return []
         
-        # Create jobs
+        # Create jobs (output_path will be set by export dialog)
         for file_path in file_paths:
             if file_path.exists():
-                output_path = output_folder / f"enhanced_{file_path.name}"
+                # Generate output filename based on suffix settings
+                base_name = file_path.stem
+                extension = file_path.suffix
+                
+                # Get suffix based on mode
+                suffix_mode = self.suffix_mode_var.get()
+                if suffix_mode == "auto":
+                    # Generate auto suffix from parameters
+                    scale_value = self.get_scale_value()
+                    suffix = generate_auto_suffix(parameters, scale_value, self.quality_var.get())
+                elif suffix_mode == "custom":
+                    suffix = self.custom_suffix_var.get()
+                    if not suffix.startswith("-") and suffix:
+                        suffix = "-" + suffix
+                else:
+                    suffix = ""
+                
+                # Construct output filename
+                prefix = self.prefix_var.get()
+                output_filename = f"{prefix}{base_name}{suffix}{extension}"
+                
+                # Create job without output_path (will be set by export dialog)
                 job = ProcessingJob(
                     input_path=file_path,
-                    output_path=output_path,
+                    output_path=None,  # Will be set by export dialog
                     parameters=parameters
                 )
+                # Store the generated filename for reference
+                job.output_filename = output_filename
                 jobs.append(job)
         
         return jobs
@@ -895,13 +985,194 @@ with support for all the latest AI models and batch processing.
         
 Features:
 • Support for all AI model categories
-• Advanced parameter control
+• Advanced parameter control with value verification
 • Batch processing with progress tracking
+• Export settings (quality, prefix, suffix)
+• Auto-suffix generation from parameters
+• JSON configuration import/export
 • Preset management
 • Comprehensive logging
-• Audio/visual notifications"""
+• Audio/visual notifications
+• Processing completion detection"""
         
         messagebox.showinfo("About GigaUp", about_text)
+    
+    def _set_export_parameters(self):
+        """Set export parameters in Gigapixel before processing"""
+        # Get suffix based on mode
+        suffix_mode = self.suffix_mode_var.get()
+        suffix_config = {}
+        
+        if suffix_mode == "auto":
+            # Auto mode - will generate suffix from parameters
+            suffix_config = {"mode": "auto"}
+            # For auto mode, we need to generate the suffix and set it
+            if self.current_jobs:
+                # Generate suffix from first job parameters
+                scale_value = self.get_scale_value()
+                auto_suffix = generate_auto_suffix(
+                    self.current_jobs[0].parameters, 
+                    scale_value, 
+                    self.quality_var.get()
+                )
+                # Keep the dash - export dialog now handles it properly
+                suffix_value = auto_suffix
+            else:
+                suffix_value = "1"  # Default if no jobs
+        elif suffix_mode == "custom":
+            suffix_value = self.custom_suffix_var.get()
+            # Keep the dash - export dialog now handles it properly
+        else:
+            # None mode
+            suffix_value = "0"
+        
+        # Set export parameters
+        self.gigapixel.set_export_parameters(
+            quality=self.quality_var.get(),
+            prefix=self.prefix_var.get(),
+            suffix=suffix_value
+        )
+        
+        # Set output directory if specified
+        output_path = self.output_path_var.get().strip()
+        if output_path:
+            self.gigapixel.set_output_directory(output_path)
+    
+    def import_json_config(self):
+        """Import settings from JSON configuration file"""
+        filename = filedialog.askopenfilename(
+            title="Import JSON Configuration",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if not filename:
+            return
+        
+        try:
+            with open(filename, 'r') as f:
+                config = json.load(f)
+            
+            # Apply settings from config
+            if 'input' in config:
+                self.input_path_var.set(config['input'])
+            
+            if 'output' in config:
+                self.output_path_var.set(config['output'])
+            
+            if 'executable' in config:
+                self.executable_path = config['executable']
+            
+            if 'quality' in config:
+                self.quality_var.set(config['quality'])
+            
+            if 'prefix' in config:
+                self.prefix_var.set(config['prefix'])
+            
+            if 'suffix' in config:
+                # Parse suffix mode
+                suffix_config = parse_suffix_mode(config['suffix'])
+                if suffix_config['mode'] == 'auto':
+                    self.suffix_mode_var.set('auto')
+                elif suffix_config['mode'] == 'custom':
+                    self.suffix_mode_var.set('custom')
+                    self.custom_suffix_var.set(suffix_config['value'])
+                else:
+                    self.suffix_mode_var.set('none')
+            
+            # Apply model and parameters
+            if 'model' in config:
+                # Find and select the model
+                model_name = config['model']
+                model = self.model_factory.get_model_by_name(model_name)
+                if model:
+                    # Find the category and select it
+                    category = model.category
+                    if category in self.model_widgets:
+                        self.model_widgets[category]['var'].set(model.name)
+                        self.on_model_selected(model)
+                        
+                        # Apply parameters if present
+                        if 'parameters' in config:
+                            param_widgets = self.model_widgets[category]['param_widgets']
+                            for param_name, param_value in config['parameters'].items():
+                                if param_name in param_widgets:
+                                    param_widgets[param_name].set_value(param_value)
+            
+            # Apply scale
+            if 'scale' in config:
+                self.scale_var.set(config['scale'])
+            elif 'width' in config:
+                self.scale_var.set(f"w{config['width']}")
+            elif 'height' in config:
+                self.scale_var.set(f"h{config['height']}")
+            
+            self.log_message(f"Imported configuration from {filename}", "SUCCESS")
+            messagebox.showinfo("Success", "Configuration imported successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to import configuration: {e}")
+            self.log_message(f"Failed to import configuration: {e}", "ERROR")
+    
+    def export_json_config(self):
+        """Export current settings to JSON configuration file"""
+        filename = filedialog.asksaveasfilename(
+            title="Export JSON Configuration",
+            defaultextension=".json",
+            filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
+        )
+        if not filename:
+            return
+        
+        try:
+            # Gather current settings
+            config = {
+                "input": self.input_path_var.get(),
+                "output": self.output_path_var.get(),
+                "executable": self.executable_path,
+                "quality": self.quality_var.get(),
+                "prefix": self.prefix_var.get()
+            }
+            
+            # Handle suffix based on mode
+            suffix_mode = self.suffix_mode_var.get()
+            if suffix_mode == "auto":
+                config["suffix"] = "auto"
+            elif suffix_mode == "custom":
+                config["suffix"] = self.custom_suffix_var.get()
+            else:
+                config["suffix"] = "0"
+            
+            # Add model and parameters
+            if self.selected_model:
+                config["model"] = self.selected_model.name
+                
+                # Get current parameter values
+                category = self.selected_model.category
+                if category in self.model_widgets:
+                    param_widgets = self.model_widgets[category]['param_widgets']
+                    parameters = {}
+                    for param_name, widget in param_widgets.items():
+                        parameters[param_name] = widget.get_value()
+                    config["parameters"] = parameters
+            
+            # Add scale
+            scale_value = self.scale_var.get()
+            if scale_value.startswith('w'):
+                config["width"] = scale_value[1:]
+            elif scale_value.startswith('h'):
+                config["height"] = scale_value[1:]
+            else:
+                config["scale"] = scale_value
+            
+            # Write to file
+            with open(filename, 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            self.log_message(f"Exported configuration to {filename}", "SUCCESS")
+            messagebox.showinfo("Success", "Configuration exported successfully!")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to export configuration: {e}")
+            self.log_message(f"Failed to export configuration: {e}", "ERROR")
     
     def on_closing(self):
         """Handle application closing"""

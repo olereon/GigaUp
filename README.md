@@ -44,6 +44,14 @@
 🛡️ **Production Ready**: Clean, optimized codebase with comprehensive error handling  
 🔧 **Enhanced Reliability**: Advanced fallback strategies for all UI operations
 
+### GUI Features (v2.0+) 🎨
+🎛️ **Export Controls**: Quality, prefix, and suffix settings with auto-generation  
+📄 **JSON Configuration**: Import/export complete settings for reproducible workflows  
+🔄 **Auto-Suffix Generation**: Intelligent naming based on model and parameters  
+⚙️ **Advanced Export Dialog**: Seamless integration with Gigapixel's export system  
+📝 **Enhanced Logging**: Comprehensive operation tracking with collapsible viewer  
+🎯 **Smart Parameter Controls**: Context-aware widgets with validation and tooltips
+
 ## Requirements
 
 - **Windows 10/11** (required for Topaz Gigapixel AI automation)
@@ -81,10 +89,41 @@ gigapixel
 
 # Features:
 # - Visual model selection with tooltips
+# - Export settings (quality, prefix, suffix modes)
+# - Auto-suffix generation from parameters
+# - JSON configuration import/export
 # - Batch processing with progress tracking
 # - Parameter fine-tuning with validation
 # - Preset management
 # - Real-time logging with collapsible viewer
+```
+
+#### GUI Export Settings
+- **Quality**: JPEG quality (1-100, default: 95)
+- **Prefix**: Optional filename prefix
+- **Suffix Modes**:
+  - **Auto**: Generated from model and parameters (e.g., `-3x-rc-hi2`)
+  - **Custom**: User-defined suffix text
+  - **None**: No suffix added
+
+#### JSON Configuration
+```bash
+# Import settings from JSON file
+File → Import JSON Config...
+
+# Export current settings to JSON
+File → Export JSON Config...
+
+# Example JSON structure:
+{
+  "input": "C:/images/folder",
+  "output": "C:/output",
+  "model": "redefine_creative",
+  "parameters": {"creativity": "High", "texture": 2},
+  "scale": "4x",
+  "quality": 95,
+  "suffix": "auto"
+}
 ```
 
 ### Command Line Interface
@@ -100,6 +139,13 @@ gigapixel-cli folder/ -e path/to/exe -m high_fidelity_v2 -o output_folder/
 
 # Using presets
 gigapixel-cli input.jpg -e path/to/exe --preset "my_favorite_settings"
+
+# JSON configuration
+gigapixel-cli --json config.json
+
+# Suffix generation modes
+gigapixel-cli input.jpg -e path/to/exe -m redefine_creative --suffix auto  # Auto-generate
+gigapixel-cli input.jpg -e path/to/exe -m standard_v2 --suffix "-custom"   # Custom suffix
 
 # List available models
 gigapixel-cli --list-models
