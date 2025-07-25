@@ -225,7 +225,7 @@ class ParameterManager:
             if param_def.default_value is not None:
                 default_params[param_name] = param_def.default_value
         
-        return ProcessingParameters(model=model, parameters=default_params)
+        return ProcessingParameters(model=model, parameters=default_params, scale="2x")
 
 
 class ParameterBuilder:

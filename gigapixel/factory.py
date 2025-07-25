@@ -112,9 +112,12 @@ class ModelFactory:
                 else:
                     raise InvalidModelConfigError(f"Parameter '{param_name}' not valid for model '{model_name}'")
         
-        # Set scale if provided
+        # Set scale if provided, otherwise use default
         if scale:
             default_params.scale = scale
+        elif not default_params.scale:
+            # If no scale is provided and none exists, default to 2x
+            default_params.scale = "2x"
         
         return default_params
     
